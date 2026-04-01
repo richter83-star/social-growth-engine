@@ -114,3 +114,15 @@
 - [x] EngagementQueue: replace displayed comment text with the new AI draft on success
 - [x] Stripe: set STRIPE_PRICE_PRO and STRIPE_PRICE_AGENCY as secrets
 - [x] Tests: add regenerate mutation test
+
+## Demo Video for Landing Page Hero
+- [x] Generate reference images (dark SaaS UI, cyberpunk style, purple/blue accents)
+- [x] Plan 4 video clips: Discovery scan → Thread selection → AI draft + Approve → Analytics growth
+- [x] Generate keyframes (first + last) for all 4 clips
+- [x] Generate 4 video clips (clip1: 8s, clip2: 6s, clip3: 8s, clip4: 8s)
+- [x] Generate electronic BGM (35s, synthesized upbeat electronic track)
+- [x] Assemble final 30s demo video with BGM overlay and audio mixing
+- [x] Upload demo video to CDN
+- [x] Add DemoModal component to LandingPage.tsx with keyboard close (Escape) and backdrop click
+- [x] Add "Watch Demo" button to hero CTA row
+- [x] Add autoplay muted video thumbnail preview in hero section with play overlay

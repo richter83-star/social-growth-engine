@@ -8,7 +8,7 @@ import {
   Twitter, Linkedin, CheckCircle, ArrowRight, Star, Shield,
   TrendingUp, Bot, Globe, ChevronRight, Menu, X
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 // ─── Sticky Nav ───────────────────────────────────────────────────────────────
 function Nav({ onLogin }: { onLogin: () => void }) {
@@ -80,8 +80,60 @@ function Nav({ onLogin }: { onLogin: () => void }) {
   );
 }
 
+// ─── Demo Video Modal ─────────────────────────────────────────────────────────
+const DEMO_VIDEO_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663173269466/VjDim4zfSa7JibwAxW3pTx/demo_final_5e533c7a.mp4";
+
+function DemoModal({ onClose }: { onClose: () => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handleKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+      document.body.style.overflow = "";
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-4xl mx-4 rounded-2xl overflow-hidden shadow-2xl shadow-violet-500/30 border border-white/10"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center text-white/80 hover:text-white transition-all"
+        >
+          <X className="w-5 h-5" />
+        </button>
+        {/* Video */}
+        <video
+          ref={videoRef}
+          src={DEMO_VIDEO_URL}
+          autoPlay
+          controls
+          className="w-full aspect-video bg-black"
+          playsInline
+        />
+        <div className="bg-[#0d0d18] px-6 py-3 flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
+          <span className="text-sm text-white/60">Social Growth Engine — Live Demo</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Hero ─────────────────────────────────────────────────────────────────────
 function Hero({ onLogin }: { onLogin: () => void }) {
+  const [showDemo, setShowDemo] = useState(false);
+
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-[#0a0a0f]">
       {/* Background glow */}
@@ -118,11 +170,44 @@ function Hero({ onLogin }: { onLogin: () => void }) {
             Start Free — No Credit Card
             <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
-          <a href="#how-it-works">
-            <Button size="lg" variant="outline" className="border-white/20 text-white/80 hover:bg-white/10 hover:text-white h-12 px-8 text-base bg-transparent">
-              See How It Works
-            </Button>
-          </a>
+          <Button
+            size="lg"
+            variant="outline"
+            className="border-white/20 text-white/80 hover:bg-white/10 hover:text-white h-12 px-8 text-base bg-transparent gap-2"
+            onClick={() => setShowDemo(true)}
+          >
+            <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+              <div className="w-0 h-0 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent border-l-[9px] border-l-white ml-0.5" />
+            </div>
+            Watch Demo
+          </Button>
+        </div>
+
+        {/* Demo video preview thumbnail */}
+        <div
+          className="relative max-w-3xl mx-auto mb-16 rounded-2xl overflow-hidden border border-white/10 shadow-2xl shadow-violet-500/20 cursor-pointer group"
+          onClick={() => setShowDemo(true)}
+        >
+          <video
+            src={DEMO_VIDEO_URL}
+            className="w-full aspect-video object-cover"
+            muted
+            loop
+            autoPlay
+            playsInline
+            preload="metadata"
+          />
+          {/* Play overlay */}
+          <div className="absolute inset-0 bg-black/30 group-hover:bg-black/20 transition-all flex items-center justify-center">
+            <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center group-hover:scale-110 transition-transform shadow-xl">
+              <div className="w-0 h-0 border-t-[10px] border-t-transparent border-b-[10px] border-b-transparent border-l-[18px] border-l-white ml-1" />
+            </div>
+          </div>
+          {/* Label */}
+          <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-sm rounded-lg px-3 py-1.5 flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
+            <span className="text-xs text-white/80 font-medium">Live Platform Demo · 30s</span>
+          </div>
         </div>
 
         {/* Stats bar */}
@@ -140,6 +225,9 @@ function Hero({ onLogin }: { onLogin: () => void }) {
           ))}
         </div>
       </div>
+
+      {/* Demo modal */}
+      {showDemo && <DemoModal onClose={() => setShowDemo(false)} />}
     </section>
   );
 }
