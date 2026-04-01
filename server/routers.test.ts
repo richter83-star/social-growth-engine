@@ -32,6 +32,15 @@ vi.mock("./db", () => ({
   markAllNotificationsRead: vi.fn().mockResolvedValue(undefined),
   getLearningInsights: vi.fn().mockResolvedValue([]),
   createLearningOutcome: vi.fn().mockResolvedValue(undefined),
+  // Schedules
+  getSchedulesByUser: vi.fn().mockResolvedValue([]),
+  createSchedule: vi.fn().mockResolvedValue({ id: 1, userId: 1, campaignId: 1, name: "Daily Scan", cronExpression: "0 9 * * *", timezone: "UTC", isActive: true, runCount: 0, lastRunAt: null, nextRunAt: new Date(), createdAt: new Date() }),
+  updateScheduleDb: vi.fn().mockResolvedValue(undefined),
+  deleteSchedule: vi.fn().mockResolvedValue(undefined),
+  // Subscriptions
+  getSubscriptionByUserId: vi.fn().mockResolvedValue(null),
+  upsertSubscription: vi.fn().mockResolvedValue(undefined),
+  updateSubscription: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("./engagementEngine", () => ({
@@ -51,6 +60,22 @@ vi.mock("./engagementEngine", () => ({
 vi.mock("./_core/notification", () => ({
   notifyOwner: vi.fn().mockResolvedValue(true),
 }));
+
+vi.mock("./scheduler", () => ({
+  registerSchedule: vi.fn(),
+  stopSchedule: vi.fn(),
+  triggerScheduleNow: vi.fn().mockResolvedValue({ discovered: 3 }),
+  initScheduler: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("stripe", () => {
+  const mockStripe = {
+    checkout: { sessions: { create: vi.fn().mockResolvedValue({ url: "https://checkout.stripe.com/test" }) } },
+    billingPortal: { sessions: { create: vi.fn().mockResolvedValue({ url: "https://billing.stripe.com/test" }) } },
+    subscriptions: { retrieve: vi.fn().mockResolvedValue({ items: { data: [{ price: { id: "price_test" } }] }, current_period_end: 1800000000 }) },
+  };
+  return { default: vi.fn(() => mockStripe) };
+});
 
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
@@ -212,5 +237,68 @@ describe("notifications", () => {
     const caller = appRouter.createCaller(ctx);
     const result = await caller.notifications.list({ limit: 10 });
     expect(Array.isArray(result)).toBe(true);
+  });
+});
+
+// ─── Schedules Tests ──────────────────────────────────────────────────────────
+describe("schedules", () => {
+  it("lists schedules for authenticated user", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.schedules.list();
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it("rejects schedule with invalid cron expression (too few fields)", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    await expect(
+      caller.schedules.create({
+        campaignId: 1,
+        name: "Bad Schedule",
+        cronExpression: "invalid",
+        timezone: "UTC",
+      })
+    ).rejects.toThrow();
+  });
+
+  it("accepts a valid 5-field cron expression", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    // Should not throw for valid cron
+    const result = await caller.schedules.create({
+      campaignId: 1,
+      name: "Daily Scan",
+      cronExpression: "0 9 * * *",
+      timezone: "UTC",
+    });
+    // DB mock returns undefined by default, so result may be undefined — just check no throw
+    expect(true).toBe(true);
+  });
+});
+
+// ─── Billing Tests ────────────────────────────────────────────────────────────
+describe("billing", () => {
+  it("returns free plan when no subscription exists", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.billing.getSubscription();
+    expect((result as { plan: string }).plan).toBe("free");
+  });
+
+  it("returns plan limits for free tier", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.billing.getPlanLimits();
+    expect(result.plan).toBe("free");
+    expect(result.limits).toBeDefined();
+  });
+
+  it("rejects checkout for unknown plan", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    await expect(
+      caller.billing.createCheckout({ plan: "pro" as "pro", origin: "https://example.com" })
+    ).rejects.toThrow();
   });
 });

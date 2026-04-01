@@ -163,3 +163,40 @@ export const learningOutcomes = mysqlTable("learning_outcomes", {
 
 export type LearningOutcome = typeof learningOutcomes.$inferSelect;
 export type InsertLearningOutcome = typeof learningOutcomes.$inferInsert;
+
+// Campaign schedules
+export const campaignSchedules = mysqlTable("campaign_schedules", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  campaignId: int("campaignId").notNull(),
+  name: varchar("name", { length: 256 }).notNull(),
+  cronExpression: varchar("cronExpression", { length: 128 }).notNull(),
+  timezone: varchar("timezone", { length: 64 }).default("UTC").notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  lastRunAt: timestamp("lastRunAt"),
+  nextRunAt: timestamp("nextRunAt"),
+  runCount: int("runCount").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CampaignSchedule = typeof campaignSchedules.$inferSelect;
+export type InsertCampaignSchedule = typeof campaignSchedules.$inferInsert;
+
+// User subscriptions (Stripe)
+export const subscriptions = mysqlTable("subscriptions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  stripeCustomerId: varchar("stripeCustomerId", { length: 128 }),
+  stripeSubscriptionId: varchar("stripeSubscriptionId", { length: 128 }),
+  stripePriceId: varchar("stripePriceId", { length: 128 }),
+  plan: mysqlEnum("plan", ["free", "pro", "agency"]).default("free").notNull(),
+  status: mysqlEnum("status", ["active", "canceled", "past_due", "trialing", "incomplete"]).default("active").notNull(),
+  currentPeriodEnd: timestamp("currentPeriodEnd"),
+  cancelAtPeriodEnd: boolean("cancelAtPeriodEnd").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = typeof subscriptions.$inferInsert;

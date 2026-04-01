@@ -43,3 +43,22 @@
 - [x] accounts router tests
 - [x] campaigns router tests
 - [x] engagement generation tests
+
+## Scheduling System
+- [x] Add schedules table to DB schema (campaignId, cronExpression, timezone, isActive, lastRun, nextRun)
+- [x] Backend cron engine: node-cron runner that fires discovery jobs on schedule
+- [x] schedules tRPC router: CRUD for campaign schedules
+- [x] Schedule UI page: create/edit/delete schedules per campaign with cron presets
+- [x] Show next run time and last run time in schedule list
+- [x] Notify owner when a scheduled discovery run completes
+
+## Stripe Paywall
+- [x] Add Stripe via webdev_add_feature
+- [x] Add subscriptions table (userId, stripeCustomerId, stripePriceId, status, currentPeriodEnd)
+- [x] Stripe checkout session creation (tRPC mutation)
+- [x] Stripe webhook handler: handle checkout.session.completed, customer.subscription.updated, customer.subscription.deleted
+- [x] Pricing page with 3 tiers: Free (1 campaign, 50 threads/mo), Pro ($49/mo, 5 campaigns, unlimited), Agency ($149/mo, unlimited)
+- [x] Subscription gating middleware: enforce plan limits on campaign creation and discovery runs
+- [x] Billing portal link (Stripe customer portal)
+- [x] Show current plan badge in sidebar
+- [x] Upgrade prompt when user hits plan limits

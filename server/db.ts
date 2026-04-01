@@ -9,6 +9,8 @@ import {
   performanceMetrics, InsertPerformanceMetric,
   notifications, InsertNotification,
   learningOutcomes, InsertLearningOutcome,
+  campaignSchedules, InsertCampaignSchedule,
+  subscriptions, InsertSubscription,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -257,4 +259,68 @@ export async function createLearningOutcome(data: InsertLearningOutcome) {
   const db = await getDb();
   if (!db) return;
   await db.insert(learningOutcomes).values(data);
+}
+
+// ─── Campaign Schedules ───────────────────────────────────────────────────────
+
+export async function getSchedulesByUser(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(campaignSchedules).where(eq(campaignSchedules.userId, userId)).orderBy(desc(campaignSchedules.createdAt));
+}
+
+export async function getScheduleById(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(campaignSchedules).where(and(eq(campaignSchedules.id, id), eq(campaignSchedules.userId, userId))).limit(1);
+  return result[0];
+}
+
+export async function getActiveSchedules() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(campaignSchedules).where(eq(campaignSchedules.isActive, true));
+}
+
+export async function createSchedule(data: InsertCampaignSchedule) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.insert(campaignSchedules).values(data);
+  const result = await db.select().from(campaignSchedules)
+    .where(and(eq(campaignSchedules.userId, data.userId), eq(campaignSchedules.campaignId, data.campaignId)))
+    .orderBy(desc(campaignSchedules.createdAt)).limit(1);
+  return result[0];
+}
+
+export async function updateSchedule(id: number, userId: number, data: Partial<InsertCampaignSchedule>) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.update(campaignSchedules).set(data).where(and(eq(campaignSchedules.id, id), eq(campaignSchedules.userId, userId)));
+}
+
+export async function deleteSchedule(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.delete(campaignSchedules).where(and(eq(campaignSchedules.id, id), eq(campaignSchedules.userId, userId)));
+}
+
+// ─── Subscriptions ────────────────────────────────────────────────────────────
+
+export async function getSubscriptionByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(subscriptions).where(eq(subscriptions.userId, userId)).limit(1);
+  return result[0];
+}
+
+export async function upsertSubscription(data: InsertSubscription) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.insert(subscriptions).values(data).onDuplicateKeyUpdate({ set: data });
+}
+
+export async function updateSubscription(userId: number, data: Partial<InsertSubscription>) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.update(subscriptions).set(data).where(eq(subscriptions.userId, userId));
 }

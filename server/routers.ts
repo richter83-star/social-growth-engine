@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -16,6 +17,13 @@ import {
   discoverThreads, generateEngagement, computeLearningInsights, generateSeedMetrics,
 } from "./engagementEngine";
 import { notifyOwner } from "./_core/notification";
+import { registerSchedule, stopSchedule, triggerScheduleNow } from "./scheduler";
+import {
+  getSchedulesByUser, createSchedule, updateSchedule as updateScheduleDb, deleteSchedule,
+  getSubscriptionByUserId, upsertSubscription, updateSubscription,
+} from "./db";
+import Stripe from "stripe";
+import { PLAN_LIMITS, STRIPE_PRICES } from "./products";
 
 // ─── Accounts Router ──────────────────────────────────────────────────────────
 const accountsRouter = router({
@@ -81,8 +89,21 @@ const campaignsRouter = router({
       playbook: z.enum(["3_day_warmup", "direct_negotiator"]).default("direct_negotiator"),
       targetEngagements: z.number().default(50),
     }))
-    .mutation(({ ctx, input }) =>
-      createCampaign({
+    .mutation(async ({ ctx, input }) => {
+      // Enforce plan limits on campaign count
+      const sub = await getSubscriptionByUserId(ctx.user.id);
+      const plan = (sub?.plan ?? "free") as keyof typeof PLAN_LIMITS;
+      const limit = PLAN_LIMITS[plan].campaigns;
+      if (limit !== -1) {
+        const existing = await getCampaignsByUser(ctx.user.id);
+        if (existing.length >= limit) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: `PLAN_LIMIT:campaigns:${plan}:${limit}`,
+          });
+        }
+      }
+      return createCampaign({
         userId: ctx.user.id,
         name: input.name,
         description: input.description ?? null,
@@ -92,8 +113,8 @@ const campaignsRouter = router({
         playbook: input.playbook,
         targetEngagements: input.targetEngagements,
         status: "draft",
-      })
-    ),
+      });
+    }),
 
   update: protectedProcedure
     .input(z.object({
@@ -381,6 +402,128 @@ const notificationsRouter = router({
     .mutation(({ ctx }) => markAllNotificationsRead(ctx.user.id)),
 });
 
+// ─── Schedules Router ────────────────────────────────────────────────────────
+const schedulesRouter = router({
+  list: protectedProcedure.query(({ ctx }) => getSchedulesByUser(ctx.user.id)),
+
+  create: protectedProcedure
+    .input(z.object({
+      campaignId: z.number(),
+      name: z.string().min(1).max(256),
+      cronExpression: z.string().min(1),
+      timezone: z.string().default("UTC"),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const parts = input.cronExpression.trim().split(/\s+/);
+      if (parts.length !== 5) throw new Error("Invalid cron expression: must have 5 fields (min hour dom mon dow)");
+      const nextRunAt = new Date(Date.now() + 60 * 1000);
+      const schedule = await createSchedule({
+        userId: ctx.user.id,
+        campaignId: input.campaignId,
+        name: input.name,
+        cronExpression: input.cronExpression,
+        timezone: input.timezone,
+        isActive: true,
+        nextRunAt,
+      });
+      if (schedule) {
+        registerSchedule({ id: schedule.id, campaignId: schedule.campaignId, userId: schedule.userId, cronExpression: schedule.cronExpression, isActive: schedule.isActive });
+      }
+      return schedule;
+    }),
+
+  update: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      isActive: z.boolean().optional(),
+      cronExpression: z.string().optional(),
+      name: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...data } = input;
+      await updateScheduleDb(id, ctx.user.id, data);
+      const schedules = await getSchedulesByUser(ctx.user.id);
+      const updated = schedules.find((s) => s.id === id);
+      if (updated) {
+        if (updated.isActive) {
+          registerSchedule({ id: updated.id, campaignId: updated.campaignId, userId: updated.userId, cronExpression: updated.cronExpression, isActive: updated.isActive });
+        } else {
+          stopSchedule(id);
+        }
+      }
+      return { success: true };
+    }),
+
+  delete: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      stopSchedule(input.id);
+      await deleteSchedule(input.id, ctx.user.id);
+      return { success: true };
+    }),
+
+  runNow: protectedProcedure
+    .input(z.object({ id: z.number(), campaignId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      return triggerScheduleNow(input.id, input.campaignId, ctx.user.id);
+    }),
+});
+
+// ─── Billing Router ───────────────────────────────────────────────────────────
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", { apiVersion: "2026-03-25.dahlia" });
+
+const billingRouter = router({
+  getSubscription: protectedProcedure.query(async ({ ctx }) => {
+    const sub = await getSubscriptionByUserId(ctx.user.id);
+    return sub ?? { plan: "free" as const, status: "active" as const };
+  }),
+
+  createCheckout: protectedProcedure
+    .input(z.object({
+      plan: z.enum(["pro", "agency"]),
+      origin: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const priceId = STRIPE_PRICES[input.plan];
+      if (!priceId || priceId.includes("placeholder")) throw new Error("Stripe price IDs not configured. Please set STRIPE_PRICE_PRO and STRIPE_PRICE_AGENCY in Settings.");
+      const session = await stripe.checkout.sessions.create({
+        mode: "subscription",
+        payment_method_types: ["card"],
+        customer_email: ctx.user.email ?? undefined,
+        allow_promotion_codes: true,
+        line_items: [{ price: priceId, quantity: 1 }],
+        success_url: `${input.origin}/billing?success=1`,
+        cancel_url: `${input.origin}/billing?canceled=1`,
+        client_reference_id: ctx.user.id.toString(),
+        metadata: {
+          user_id: ctx.user.id.toString(),
+          customer_email: ctx.user.email ?? "",
+          customer_name: ctx.user.name ?? "",
+          plan: input.plan,
+        },
+      });
+      return { url: session.url };
+    }),
+
+  createPortal: protectedProcedure
+    .input(z.object({ origin: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const sub = await getSubscriptionByUserId(ctx.user.id);
+      if (!sub?.stripeCustomerId) throw new Error("No active subscription found");
+      const session = await stripe.billingPortal.sessions.create({
+        customer: sub.stripeCustomerId,
+        return_url: `${input.origin}/billing`,
+      });
+      return { url: session.url };
+    }),
+
+  getPlanLimits: protectedProcedure.query(async ({ ctx }) => {
+    const sub = await getSubscriptionByUserId(ctx.user.id);
+    const plan = (sub?.plan ?? "free") as keyof typeof PLAN_LIMITS;
+    return { plan, limits: PLAN_LIMITS[plan] };
+  }),
+});
+
 // ─── App Router ───────────────────────────────────────────────────────────────
 export const appRouter = router({
   system: systemRouter,
@@ -398,6 +541,8 @@ export const appRouter = router({
   engagement: engagementRouter,
   analytics: analyticsRouter,
   notifications: notificationsRouter,
+  schedules: schedulesRouter,
+  billing: billingRouter,
 });
 
 export type AppRouter = typeof appRouter;

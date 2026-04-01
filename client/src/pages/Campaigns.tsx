@@ -9,7 +9,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Megaphone, Plus, Play, Pause, Trash2, Target, X, CheckCircle2 } from "lucide-react";
+import { Megaphone, Plus, Play, Pause, Trash2, Target, X, CheckCircle2, Crown } from "lucide-react";
+import { useLocation } from "wouter";
 
 const STATUS_COLORS: Record<string, string> = {
   draft: "bg-muted text-muted-foreground",
@@ -26,6 +27,7 @@ const PLATFORM_COLORS: Record<string, string> = {
 
 export default function Campaigns() {
   const utils = trpc.useUtils();
+  const [, navigate] = useLocation();
   const { data: campaigns, isLoading } = trpc.campaigns.list.useQuery();
   const createMutation = trpc.campaigns.create.useMutation({
     onSuccess: () => {
@@ -35,7 +37,20 @@ export default function Campaigns() {
       setOpen(false);
       resetForm();
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => {
+      if (e.message.startsWith("PLAN_LIMIT:")) {
+        const parts = e.message.split(":");
+        const plan = parts[2] ?? "free";
+        const limit = parts[3] ?? "1";
+        toast.error(`${plan.charAt(0).toUpperCase() + plan.slice(1)} plan limit: ${limit} campaign${Number(limit) !== 1 ? "s" : ""}. Upgrade to create more.`, {
+          action: { label: "Upgrade Now", onClick: () => navigate("/billing") },
+          duration: 8000,
+          icon: <Crown className="h-4 w-4 text-primary" />,
+        });
+      } else {
+        toast.error(e.message);
+      }
+    },
   });
   const updateMutation = trpc.campaigns.update.useMutation({
     onSuccess: () => { utils.campaigns.list.invalidate(); toast.success("Campaign updated"); },

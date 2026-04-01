@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, Megaphone, Search, MessageSquareMore, BarChart3, Bell, Zap } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, Megaphone, Search, MessageSquareMore, BarChart3, Bell, Zap, Calendar, CreditCard, Crown } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -35,12 +35,41 @@ const menuItems = [
   { icon: Search, label: "Discovery", path: "/discovery" },
   { icon: MessageSquareMore, label: "Engagement Queue", path: "/queue" },
   { icon: BarChart3, label: "Analytics", path: "/analytics" },
+  { icon: Calendar, label: "Schedules", path: "/schedules" },
+  { icon: CreditCard, label: "Billing", path: "/billing" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 280;
 const MIN_WIDTH = 200;
 const MAX_WIDTH = 480;
+
+function PlanBadge() {
+  const { data: sub } = trpc.billing.getSubscription.useQuery(undefined, { staleTime: 60_000 });
+  const plan = (sub as { plan?: string })?.plan ?? "free";
+  const [, navigate] = useLocation();
+  if (plan === "free") {
+    return (
+      <button
+        onClick={() => navigate("/billing")}
+        className="group-data-[collapsible=icon]:hidden w-full flex items-center gap-2 rounded-lg px-3 py-2 bg-primary/10 border border-primary/20 hover:bg-primary/20 transition-colors text-left"
+      >
+        <Crown className="h-3.5 w-3.5 text-primary shrink-0" />
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-primary leading-none">Free Plan</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">Upgrade for more</p>
+        </div>
+      </button>
+    );
+  }
+  const planLabel = plan === "pro" ? "Pro" : "Agency";
+  return (
+    <div className="group-data-[collapsible=icon]:hidden w-full flex items-center gap-2 rounded-lg px-3 py-2 bg-emerald-500/10 border border-emerald-500/20">
+      <Crown className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+      <p className="text-xs font-semibold text-emerald-400">{planLabel} Plan</p>
+    </div>
+  );
+}
 
 export default function DashboardLayout({
   children,
@@ -207,7 +236,8 @@ function DashboardLayoutContent({
             </SidebarMenu>
           </SidebarContent>
 
-          <SidebarFooter className="p-3">
+          <SidebarFooter className="p-3 space-y-2">
+            <PlanBadge />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">

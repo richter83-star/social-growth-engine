@@ -11,6 +11,8 @@ import Campaigns from "./pages/Campaigns";
 import Discovery from "./pages/Discovery";
 import EngagementQueue from "./pages/EngagementQueue";
 import Analytics from "./pages/Analytics";
+import Schedules from "./pages/Schedules";
+import Billing from "./pages/Billing";
 
 function Router() {
   return (
@@ -21,6 +23,8 @@ function Router() {
       <Route path="/discovery" component={Discovery} />
       <Route path="/queue" component={EngagementQueue} />
       <Route path="/analytics" component={Analytics} />
+      <Route path="/schedules" component={Schedules} />
+      <Route path="/billing" component={Billing} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

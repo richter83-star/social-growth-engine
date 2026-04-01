@@ -15,6 +15,13 @@
       "when": 1775025192786,
       "tag": "0001_fluffy_mikhail_rasputin",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1775035850979,
+      "tag": "0002_thankful_warstar",
+      "breakpoints": true
     }
   ]
 }
