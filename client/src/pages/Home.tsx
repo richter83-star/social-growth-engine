@@ -8,7 +8,6 @@ import {
   Users, Megaphone, Search, MessageSquareMore, TrendingUp,
   Zap, ArrowRight, CheckCircle, Clock, Bell
 } from "lucide-react";
-import { useEffect } from "react";
 
 function StatCard({ title, value, icon: Icon, color, sub }: {
   title: string; value: string | number; icon: React.ElementType; color: string; sub?: string;
@@ -37,12 +36,6 @@ export default function Home() {
   const { data: notifications } = trpc.notifications.list.useQuery({ limit: 5 }, { refetchInterval: 15000 });
   const { data: recentThreads } = trpc.discovery.getRecent.useQuery({ limit: 5 }, { refetchInterval: 20000 });
   const { data: queue } = trpc.engagement.getQueue.useQuery({ status: "pending" }, { refetchInterval: 20000 });
-  const seedMutation = trpc.analytics.seedMetrics.useMutation();
-
-  useEffect(() => {
-    seedMutation.mutate();
-  }, []);
-
   const unreadNotifs = notifications?.filter((n) => !n.isRead) ?? [];
 
   return (

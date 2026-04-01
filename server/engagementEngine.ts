@@ -226,29 +226,3 @@ export async function computeLearningInsights(
 
   return `Best performing tone: ${bestTone?.tone ?? "helpful"} (avg score: ${bestTone?.avg.toFixed(1) ?? "N/A"}). Best platform: ${bestPlatform?.platform ?? "reddit"}. Use these patterns to maximize engagement.`;
 }
-
-// Generate seed performance metrics for demo purposes
-export function generateSeedMetrics(days: number) {
-  const metrics = [];
-  const today = new Date();
-  let followers = 1200 + Math.floor(Math.random() * 500);
-
-  for (let i = days; i >= 0; i--) {
-    const date = new Date(today);
-    date.setDate(date.getDate() - i);
-    const dateStr = date.toISOString().split("T")[0];
-    const delta = Math.floor(Math.random() * 25) - 3;
-    followers += delta;
-    metrics.push({
-      date: dateStr,
-      followers: Math.max(followers, 0),
-      followerDelta: delta,
-      engagementRate: parseFloat((Math.random() * 4 + 1.5).toFixed(2)),
-      impressions: Math.floor(Math.random() * 5000 + 500),
-      engagementsCount: Math.floor(Math.random() * 120 + 10),
-      threadsDiscovered: Math.floor(Math.random() * 15),
-      commentsPosted: Math.floor(Math.random() * 8),
-    });
-  }
-  return metrics;
-}

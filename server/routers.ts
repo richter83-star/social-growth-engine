@@ -16,7 +16,7 @@ import {
   getLearningInsights, createLearningOutcome,
 } from "./db";
 import {
-  discoverThreads, generateEngagement, computeLearningInsights, generateSeedMetrics,
+  discoverThreads, generateEngagement, computeLearningInsights,
 } from "./engagementEngine";
 import { notifyOwner } from "./_core/notification";
 import { registerSchedule, stopSchedule, triggerScheduleNow } from "./scheduler";
@@ -55,9 +55,9 @@ const accountsRouter = router({
         handle: input.handle,
         displayName: input.displayName ?? input.handle,
         avatarUrl: input.avatarUrl ?? null,
-        followers: input.followers ?? Math.floor(Math.random() * 5000 + 100),
-        following: input.following ?? Math.floor(Math.random() * 1000 + 50),
-        engagementRate: parseFloat((Math.random() * 4 + 1).toFixed(2)),
+        followers: input.followers ?? 0,
+        following: input.following ?? 0,
+        engagementRate: 0,
         isActive: true,
         lastSynced: new Date(),
       })
@@ -433,27 +433,6 @@ const analyticsRouter = router({
         estimatedCost: parseFloat(cost.toFixed(2)),
         roiPercent: parseFloat(roi.toFixed(1)),
       };
-    }),
-
-  seedMetrics: protectedProcedure
-    .mutation(async ({ ctx }) => {
-      const existing = await getMetricsByUser(ctx.user.id, 1);
-      if (existing.length > 0) return { seeded: false };
-      const metrics = generateSeedMetrics(30);
-      for (const m of metrics) {
-        await upsertMetric({
-          userId: ctx.user.id,
-          date: m.date,
-          followers: m.followers,
-          followerDelta: m.followerDelta,
-          engagementRate: m.engagementRate,
-          impressions: m.impressions,
-          engagementsCount: m.engagementsCount,
-          threadsDiscovered: m.threadsDiscovered,
-          commentsPosted: m.commentsPosted,
-        });
-      }
-      return { seeded: true, days: metrics.length };
     }),
 
   learningInsights: protectedProcedure.query(async ({ ctx }) => {
