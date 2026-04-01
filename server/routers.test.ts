@@ -322,12 +322,12 @@ describe("billing", () => {
     expect(result.limits).toBeDefined();
   });
 
-  it("rejects checkout for unknown plan", async () => {
+  it("returns a checkout URL for the pro plan", async () => {
     const { ctx } = createAuthContext();
     const caller = appRouter.createCaller(ctx);
-    await expect(
-      caller.billing.createCheckout({ plan: "pro" as "pro", origin: "https://example.com" })
-    ).rejects.toThrow();
+    const result = await caller.billing.createCheckout({ plan: "pro", origin: "https://example.com" });
+    expect(result).toHaveProperty("url");
+    expect(typeof result.url).toBe("string");
   });
 });
 

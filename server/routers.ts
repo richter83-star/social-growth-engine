@@ -344,6 +344,56 @@ const engagementRouter = router({
       }
       return { approved: input.ids.length };
     }),
+
+  regenerate: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      // Permission guard — regenerating is an edit-class action
+      const perms = await resolvePermissions(ctx.user.id);
+      if (!perms.canEdit) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "You do not have permission to regenerate comments." });
+      }
+      // Load the existing queue item to get thread + campaign context
+      const queue = await getQueueByUser(ctx.user.id);
+      const item = queue.find((q) => q.id === input.id);
+      if (!item) throw new TRPCError({ code: "NOT_FOUND", message: "Queue item not found." });
+      const threads = await getRecentThreadsByUser(ctx.user.id, 200);
+      const thread = threads.find((t) => t.id === item.threadId);
+      if (!thread) throw new TRPCError({ code: "NOT_FOUND", message: "Thread not found." });
+      const campaign = await getCampaignById(item.campaignId, ctx.user.id);
+      if (!campaign) throw new TRPCError({ code: "NOT_FOUND", message: "Campaign not found." });
+      // Get learning context for better regeneration
+      const outcomes = await getLearningInsights(ctx.user.id);
+      const learningContext = await computeLearningInsights(
+        outcomes.map((o) => ({
+          platform: o.platform,
+          commentTone: o.commentTone ?? "helpful",
+          successScore: o.successScore ?? 0,
+          keywordMatch: o.keywordMatch ?? "",
+        }))
+      );
+      const result = await generateEngagement(
+        {
+          title: thread.threadTitle,
+          content: thread.threadContent ?? "",
+          platform: thread.platform,
+          author: thread.author ?? "unknown",
+          keywords: campaign.keywords as string[],
+        },
+        campaign.persona,
+        learningContext
+      );
+      // Overwrite the existing queue item with the new draft, reset to pending
+      await updateEngagementStatus(input.id, ctx.user.id, "pending", {
+        generatedComment: result.comment,
+        commentTone: result.tone,
+        confidenceScore: result.confidenceScore,
+        aiReasoning: result.reasoning,
+        editedContent: null,
+        isEdited: false,
+      } as Parameters<typeof updateEngagementStatus>[3]);
+      return { id: input.id, newComment: result.comment, tone: result.tone, confidenceScore: result.confidenceScore };
+    }),
 });
 
 // ─── Analytics Router ─────────────────────────────────────────────────────────

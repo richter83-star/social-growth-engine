@@ -18,6 +18,7 @@ import {
   CheckCheck,
   Loader2,
   Shield,
+  RefreshCw,
 } from "lucide-react";
 
 type QueueItem = {
@@ -150,7 +151,17 @@ function QueueCard({ item, onRefetch, permissions }: { item: QueueItem; onRefetc
     toast.success("Restored to original AI draft.");
   }
 
-  const isBusy = updateMutation.isPending;
+  const regenerateMutation = trpc.engagement.regenerate.useMutation({
+    onSuccess: (data) => {
+      setEditText(data.newComment);
+      utils.engagement.getQueue.invalidate();
+      onRefetch();
+      toast.success("Fresh AI draft generated!");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const isBusy = updateMutation.isPending || regenerateMutation.isPending;
 
   return (
     <Card className={`bg-card border-border transition-all hover:border-primary/20 ${isEditing ? "border-primary/40 shadow-lg shadow-primary/5" : ""}`}>
@@ -193,16 +204,30 @@ function QueueCard({ item, onRefetch, permissions }: { item: QueueItem; onRefetc
               </a>
             )}
             {isPending && !isEditing && canEdit && (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 text-muted-foreground hover:text-primary"
-                onClick={() => setIsEditing(true)}
-                disabled={isBusy}
-                title="Edit comment"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
+              <>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 text-muted-foreground hover:text-amber-400"
+                  onClick={() => regenerateMutation.mutate({ id: item.id })}
+                  disabled={isBusy}
+                  title="Regenerate AI draft"
+                >
+                  {regenerateMutation.isPending
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <RefreshCw className="h-3.5 w-3.5" />}
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 text-muted-foreground hover:text-primary"
+                  onClick={() => setIsEditing(true)}
+                  disabled={isBusy}
+                  title="Edit comment"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              </>
             )}
           </div>
         </div>
