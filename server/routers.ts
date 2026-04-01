@@ -568,7 +568,7 @@ const billingRouter = router({
         customer_email: ctx.user.email ?? undefined,
         allow_promotion_codes: true,
         line_items: [{ price: priceId, quantity: 1 }],
-        success_url: `${input.origin}/billing?success=1`,
+        success_url: `${input.origin}/billing/success?session_id={CHECKOUT_SESSION_ID}&plan=${input.plan}`,
         cancel_url: `${input.origin}/billing?canceled=1`,
         client_reference_id: ctx.user.id.toString(),
         metadata: {

@@ -17,6 +17,7 @@ import Billing from "./pages/Billing";
 import Team from "./pages/Team";
 import Help from "@/pages/Help";
 import { SupportChat } from "./components/SupportChat";
+import BillingSuccess from "./pages/BillingSuccess";
 
 // All authenticated dashboard routes wrapped in DashboardLayout
 function DashboardRouter() {
@@ -31,6 +32,7 @@ function DashboardRouter() {
         <Route path="/analytics" component={Analytics} />
         <Route path="/schedules" component={Schedules} />
         <Route path="/billing" component={Billing} />
+        <Route path="/billing/success" component={BillingSuccess} />
         <Route path="/team" component={Team} />
         <Route path="/help" component={Help} />
         <Route component={NotFound} />

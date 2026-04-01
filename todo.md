@@ -150,3 +150,13 @@
 - [x] Frontend: Show on both landing page (unauthenticated) and dashboard (authenticated)
 - [x] Frontend: Persist session across page navigations using sessionStorage
 - [x] Tests: support.chat mutation test — verify LLM is called with correct system prompt and history
+
+## Post-Checkout Success Page (/billing/success)
+- [x] Frontend: BillingSuccess.tsx page — confetti animation, thank-you heading with user name, plan badge
+- [x] Frontend: Plan confirmation card showing plan name, key features unlocked, next billing date
+- [x] Frontend: 3-step onboarding checklist (Connect account → Create campaign → Run discovery)
+- [x] Frontend: Primary CTA "Create Your First Campaign →" linking to /campaigns
+- [x] Frontend: Secondary CTA "Go to Dashboard" linking to /dashboard
+- [x] Backend: Update Stripe checkout success_url to point to /billing/success?session_id={CHECKOUT_SESSION_ID}
+- [x] Route: Register /billing/success in App.tsx inside DashboardRouter
+- [x] Tests: BillingSuccess renders correct plan name and CTAs
