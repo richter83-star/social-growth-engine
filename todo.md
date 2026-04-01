@@ -90,11 +90,19 @@
 - [x] Tests: permission guard tests (owner can do all, reviewer can only approve/reject, viewer blocked)
 
 ## Instagram & TikTok Platform Support
-- [ ] DB: add `instagram` and `tiktok` to the `platform` enum in `socialAccounts` table
-- [ ] DB: add `instagram` and `tiktok` to the `platforms` JSON array validation in `campaigns` table
-- [ ] Backend: update Zod platform enum in accounts.create and campaigns.create procedures
-- [ ] Frontend: Accounts page — add Instagram and TikTok to platform dropdown with icons
-- [ ] Frontend: Campaigns page — add Instagram and TikTok to platform multi-select
-- [ ] Frontend: Discovery page — show Instagram/TikTok platform badges
-- [ ] Frontend: Accounts page — show correct platform color/icon for Instagram and TikTok cards
-- [ ] Tests: update platform validation tests to include instagram and tiktok
+- [x] DB: add `instagram` and `tiktok` to the `platform` enum in `socialAccounts` table
+- [x] DB: add `instagram` and `tiktok` to the `platforms` JSON array validation in `campaigns` table
+- [x] Backend: update Zod platform enum in accounts.create and campaigns.create procedures
+- [x] Frontend: Accounts page — add Instagram and TikTok to platform dropdown with icons
+- [x] Frontend: Campaigns page — add Instagram and TikTok to platform multi-select
+- [x] Frontend: Discovery page — show Instagram/TikTok platform badges
+- [x] Frontend: Accounts page — show correct platform color/icon for Instagram and TikTok cards
+- [x] Tests: update platform validation tests to include instagram and tiktok
+
+## FAQ & User Guide
+- [x] Help page at /help with tabbed layout: User Guide tab and FAQ tab
+- [x] User Guide: step-by-step sections for each major feature (Accounts, Campaigns, Discovery, Queue, Schedules, Billing, Team)
+- [x] User Guide: visual step indicators and collapsible sections
+- [x] FAQ: 15+ questions covering common use cases, limits, billing, and troubleshooting
+- [x] Help link in sidebar navigation
+- [x] Search/filter within FAQ

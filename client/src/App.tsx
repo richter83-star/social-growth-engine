@@ -14,6 +14,7 @@ import Analytics from "./pages/Analytics";
 import Schedules from "./pages/Schedules";
 import Billing from "./pages/Billing";
 import Team from "./pages/Team";
+import Help from "./pages/Help";
 
 function Router() {
   return (
@@ -27,6 +28,7 @@ function Router() {
       <Route path="/schedules" component={Schedules} />
       <Route path="/billing" component={Billing} />
       <Route path="/team" component={Team} />
+      <Route path="/help" component={Help} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, Megaphone, Search, MessageSquareMore, BarChart3, Bell, Zap, Calendar, CreditCard, Crown, Shield } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, Megaphone, Search, MessageSquareMore, BarChart3, Bell, Zap, Calendar, CreditCard, Crown, Shield, HelpCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -38,6 +38,7 @@ const menuItems = [
   { icon: Calendar, label: "Schedules", path: "/schedules" },
   { icon: CreditCard, label: "Billing", path: "/billing" },
   { icon: Shield, label: "Team", path: "/team" },
+  { icon: HelpCircle, label: "Help", path: "/help" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
