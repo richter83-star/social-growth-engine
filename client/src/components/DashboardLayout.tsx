@@ -29,7 +29,7 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
 const menuItems = [
-  { icon: LayoutDashboard, label: "Overview", path: "/" },
+  { icon: LayoutDashboard, label: "Overview", path: "/dashboard" },
   { icon: Users, label: "Accounts", path: "/accounts" },
   { icon: Megaphone, label: "Campaigns", path: "/campaigns" },
   { icon: Search, label: "Discovery", path: "/discovery" },

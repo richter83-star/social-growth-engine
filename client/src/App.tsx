@@ -5,6 +5,7 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import DashboardLayout from "./components/DashboardLayout";
+import LandingPage from "./pages/LandingPage";
 import Home from "./pages/Home";
 import Accounts from "./pages/Accounts";
 import Campaigns from "./pages/Campaigns";
@@ -16,21 +17,34 @@ import Billing from "./pages/Billing";
 import Team from "./pages/Team";
 import Help from "./pages/Help";
 
+// All authenticated dashboard routes wrapped in DashboardLayout
+function DashboardRouter() {
+  return (
+    <DashboardLayout>
+      <Switch>
+        <Route path="/dashboard" component={Home} />
+        <Route path="/accounts" component={Accounts} />
+        <Route path="/campaigns" component={Campaigns} />
+        <Route path="/discovery" component={Discovery} />
+        <Route path="/queue" component={EngagementQueue} />
+        <Route path="/analytics" component={Analytics} />
+        <Route path="/schedules" component={Schedules} />
+        <Route path="/billing" component={Billing} />
+        <Route path="/team" component={Team} />
+        <Route path="/help" component={Help} />
+        <Route component={NotFound} />
+      </Switch>
+    </DashboardLayout>
+  );
+}
+
+// Top-level router: public landing page at /, everything else through dashboard
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/accounts" component={Accounts} />
-      <Route path="/campaigns" component={Campaigns} />
-      <Route path="/discovery" component={Discovery} />
-      <Route path="/queue" component={EngagementQueue} />
-      <Route path="/analytics" component={Analytics} />
-      <Route path="/schedules" component={Schedules} />
-      <Route path="/billing" component={Billing} />
-      <Route path="/team" component={Team} />
-      <Route path="/help" component={Help} />
+      <Route path="/" component={LandingPage} />
       <Route path="/404" component={NotFound} />
-      <Route component={NotFound} />
+      <Route component={DashboardRouter} />
     </Switch>
   );
 }
@@ -41,9 +55,7 @@ function App() {
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <Toaster theme="dark" position="top-right" />
-          <DashboardLayout>
-            <Router />
-          </DashboardLayout>
+          <Router />
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
