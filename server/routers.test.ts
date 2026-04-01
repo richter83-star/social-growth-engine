@@ -343,3 +343,53 @@ describe("engagement.updateStatus with editedContent", () => {
     expect(Array.isArray(result)).toBe(true);
   });
 });
+
+// ─── Inline Editor Persistence Tests ─────────────────────────────────────────
+describe("engagement.updateStatus editedContent DB persistence", () => {
+  it("calls updateEngagementStatus with editedContent and isEdited in extra payload", async () => {
+    const { vi: _vi } = await import("vitest");
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+
+    // Import the mocked db module to spy on updateEngagementStatus
+    const db = await import("./db");
+    const spy = vi.spyOn(db, "updateEngagementStatus");
+
+    await caller.engagement.updateStatus({
+      id: 42,
+      status: "approved",
+      editedContent: "Edited comment for persistence test",
+    });
+
+    // Verify the DB helper was called with editedContent and isEdited in the extra arg
+    expect(spy).toHaveBeenCalledWith(
+      42,
+      1, // ctx.user.id
+      "approved",
+      expect.objectContaining({
+        editedContent: "Edited comment for persistence test",
+        isEdited: true,
+      })
+    );
+
+    spy.mockRestore();
+  });
+
+  it("does NOT set isEdited when no editedContent is provided", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+
+    const db = await import("./db");
+    const spy = vi.spyOn(db, "updateEngagementStatus");
+
+    await caller.engagement.updateStatus({ id: 7, status: "rejected" });
+
+    // extra should NOT contain editedContent or isEdited
+    const callArgs = spy.mock.calls[0];
+    const extra = callArgs?.[3] as Record<string, unknown> | undefined;
+    expect(extra?.editedContent).toBeUndefined();
+    expect(extra?.isEdited).toBeUndefined();
+
+    spy.mockRestore();
+  });
+});
