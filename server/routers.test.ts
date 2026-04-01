@@ -527,3 +527,45 @@ describe("team", () => {
     expect(result).toBeUndefined();
   });
 });
+
+// ─── Regenerate Tests ─────────────────────────────────────────────────────────
+describe("engagement.regenerate", () => {
+  it("returns a new comment when queue item and thread exist", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    // Mock queue item and thread
+    const { getQueueByUser, getRecentThreadsByUser, getCampaignById } = await import("./db");
+    vi.mocked(getQueueByUser).mockResolvedValueOnce([
+      { id: 5, threadId: 10, campaignId: 1, userId: 1, generatedComment: "Old comment", status: "pending", commentTone: "helpful", confidenceScore: 7, aiReasoning: null, editedContent: null, isEdited: false, createdAt: new Date() } as never,
+    ]);
+    vi.mocked(getRecentThreadsByUser).mockResolvedValueOnce([
+      { id: 10, userId: 1, campaignId: 1, platform: "twitter", threadTitle: "Test thread", threadUrl: "https://x.com/test", threadContent: "This is the thread content", author: "testauthor", intentScore: 0.9, status: "discovered", discoveredAt: new Date() } as never,
+    ]);
+    vi.mocked(getCampaignById).mockResolvedValueOnce({
+      id: 1, userId: 1, name: "Test Campaign", keywords: ["saas"], platforms: ["twitter"], persona: "A helpful SaaS consultant", status: "active", playbook: "direct_negotiator", targetEngagements: 50, createdAt: new Date(),
+    } as never);
+    const result = await caller.engagement.regenerate({ id: 5 });
+    expect(result).toHaveProperty("newComment");
+    expect(result).toHaveProperty("tone");
+    expect(result).toHaveProperty("confidenceScore");
+    expect(typeof result.newComment).toBe("string");
+  });
+
+  it("throws NOT_FOUND when queue item does not exist", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const { getQueueByUser } = await import("./db");
+    vi.mocked(getQueueByUser).mockResolvedValueOnce([]);
+    await expect(caller.engagement.regenerate({ id: 999 })).rejects.toThrow("not found");
+  });
+
+  it("throws FORBIDDEN when user lacks canEdit permission", async () => {
+    const { resolvePermissions } = await import("./db");
+    vi.mocked(resolvePermissions).mockResolvedValueOnce({
+      teamRole: "viewer", canEdit: false, canApprove: false, canReject: false, canDiscover: false, canManageCampaigns: false,
+    });
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    await expect(caller.engagement.regenerate({ id: 1 })).rejects.toThrow("permission");
+  });
+});

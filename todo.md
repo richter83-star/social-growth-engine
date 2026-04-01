@@ -108,9 +108,9 @@
 - [x] Search/filter within FAQ
 
 ## Regenerate Button & Stripe Secrets
-- [ ] Backend: add `engagement.regenerate` tRPC mutation that calls the AI engine to produce a new comment for an existing queue item
-- [ ] EngagementQueue: add Regenerate button (RefreshCw icon) per card — visible on pending items
-- [ ] EngagementQueue: show loading spinner on the card while regeneration is in progress
-- [ ] EngagementQueue: replace displayed comment text with the new AI draft on success
-- [ ] Stripe: set STRIPE_PRICE_PRO and STRIPE_PRICE_AGENCY as secrets
-- [ ] Tests: add regenerate mutation test
+- [x] Backend: add `engagement.regenerate` tRPC mutation that calls the AI engine to produce a new comment for an existing queue item
+- [x] EngagementQueue: add Regenerate button (RefreshCw icon) per card — visible on pending items
+- [x] EngagementQueue: show loading spinner on the card while regeneration is in progress
+- [x] EngagementQueue: replace displayed comment text with the new AI draft on success
+- [x] Stripe: set STRIPE_PRICE_PRO and STRIPE_PRICE_AGENCY as secrets
+- [x] Tests: add regenerate mutation test
