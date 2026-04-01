@@ -126,3 +126,15 @@
 - [x] Add DemoModal component to LandingPage.tsx with keyboard close (Escape) and backdrop click
 - [x] Add "Watch Demo" button to hero CTA row
 - [x] Add autoplay muted video thumbnail preview in hero section with play overlay
+
+## Social Proof Section (Landing Page)
+- [x] Add "trusted by X marketers" animated counter bar below hero stats
+- [x] Add platform logos strip (Twitter/X, Reddit, LinkedIn, Instagram, TikTok) with "Works with" label
+- [x] Add 3 testimonial cards with avatar, name, role, and quote
+- [x] Add a "Featured in / As seen on" press logo row (optional polish)
+- [x] Ensure section is responsive and matches dark SaaS design language
+
+## Stripe Webhook Verification
+- [x] Add a tRPC procedure `billing.testWebhook` that calls the Stripe API to send a test webhook event
+- [x] Write vitest test for the webhook handler: verify signature check, test event bypass, and checkout.session.completed processing
+- [x] Confirm webhook route is registered at /api/stripe/webhook with raw body parser

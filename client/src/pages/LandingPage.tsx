@@ -8,7 +8,7 @@ import {
   Twitter, Linkedin, CheckCircle, ArrowRight, Star, Shield,
   TrendingUp, Bot, Globe, ChevronRight, Menu, X
 } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 // ─── Sticky Nav ───────────────────────────────────────────────────────────────
 function Nav({ onLogin }: { onLogin: () => void }) {
@@ -512,29 +512,155 @@ function Pricing({ onLogin }: { onLogin: () => void }) {
 }
 
 // ─── Social Proof ─────────────────────────────────────────────────────────────
+// ─── Animated counter hook ────────────────────────────────────────────────────
+function useCountUp(target: number, duration = 1800, start = false) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!start) return;
+    let startTime: number | null = null;
+    const step = (timestamp: number) => {
+      if (!startTime) startTime = timestamp;
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.floor(eased * target));
+      if (progress < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, [target, duration, start]);
+  return count;
+}
+
+// ─── Social Proof ─────────────────────────────────────────────────────────────
 function SocialProof() {
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setVisible(true); },
+      { threshold: 0.2 }
+    );
+    if (sectionRef.current) observer.observe(sectionRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  const marketers = useCountUp(4800, 1800, visible);
+  const threads = useCountUp(2300000, 2000, visible);
+  const engagements = useCountUp(97000, 1600, visible);
+
   const platforms = [
-    { icon: Twitter, name: "Twitter / X", color: "text-sky-400" },
-    { icon: Linkedin, name: "LinkedIn", color: "text-blue-400" },
-    { icon: MessageSquare, name: "Reddit", color: "text-orange-400" },
-    { icon: Globe, name: "Instagram", color: "text-pink-400" },
-    { icon: Zap, name: "TikTok", color: "text-purple-400" },
+    { icon: Twitter, name: "Twitter / X", color: "text-sky-400", bg: "bg-sky-400/10 border-sky-400/20" },
+    { icon: Linkedin, name: "LinkedIn", color: "text-blue-400", bg: "bg-blue-400/10 border-blue-400/20" },
+    { icon: MessageSquare, name: "Reddit", color: "text-orange-400", bg: "bg-orange-400/10 border-orange-400/20" },
+    { icon: Globe, name: "Instagram", color: "text-pink-400", bg: "bg-pink-400/10 border-pink-400/20" },
+    { icon: Zap, name: "TikTok", color: "text-purple-400", bg: "bg-purple-400/10 border-purple-400/20" },
+  ];
+
+  const testimonials = [
+    {
+      quote: "Growth Engine tripled my Twitter following in 6 weeks without me lifting a finger. The AI comments are indistinguishable from something I'd write myself.",
+      name: "Marcus T.",
+      role: "SaaS Founder, 12k followers",
+      rating: 5,
+      avatar: "MT",
+      avatarColor: "from-violet-500 to-purple-600",
+    },
+    {
+      quote: "I was skeptical about AI engagement tools, but this is different. It actually reads the thread before replying. My LinkedIn reach went from 2k to 18k impressions/week.",
+      name: "Priya S.",
+      role: "B2B Marketing Lead",
+      rating: 5,
+      avatar: "PS",
+      avatarColor: "from-cyan-500 to-blue-600",
+    },
+    {
+      quote: "The Engagement Queue is a game-changer. I review 20 AI drafts in 5 minutes, approve the best ones, and my Reddit karma has exploded. ROI is insane.",
+      name: "Jordan K.",
+      role: "Content Creator & Consultant",
+      rating: 5,
+      avatar: "JK",
+      avatarColor: "from-emerald-500 to-teal-600",
+    },
   ];
 
   return (
-    <section className="bg-[#0a0a0f] py-16 px-6 border-y border-white/5">
-      <div className="max-w-4xl mx-auto">
-        <p className="text-center text-white/30 text-sm uppercase tracking-widest mb-10">
-          Grow across every major platform
-        </p>
-        <div className="flex flex-wrap justify-center gap-8">
-          {platforms.map(p => (
-            <div key={p.name} className="flex items-center gap-2.5 text-white/50 hover:text-white/80 transition-colors">
-              <p.icon className={`w-5 h-5 ${p.color}`} />
-              <span className="text-sm font-medium">{p.name}</span>
+    <section ref={sectionRef} className="bg-[#0a0a0f] py-20 px-6 border-y border-white/5" id="social-proof">
+      <div className="max-w-6xl mx-auto space-y-16">
+
+        {/* ── Animated stats counter ── */}
+        <div className="text-center">
+          <p className="text-white/30 text-xs uppercase tracking-widest mb-8">Trusted by growth-focused marketers worldwide</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-3xl mx-auto">
+            <div className="bg-white/[0.03] border border-white/8 rounded-2xl p-6 hover:border-violet-500/30 transition-colors">
+              <div className="text-4xl font-black text-white mb-1">
+                {visible ? marketers.toLocaleString() : "0"}+
+              </div>
+              <div className="text-sm text-white/40">Active Marketers</div>
             </div>
-          ))}
+            <div className="bg-white/[0.03] border border-white/8 rounded-2xl p-6 hover:border-cyan-500/30 transition-colors">
+              <div className="text-4xl font-black text-white mb-1">
+                {visible ? (threads / 1000000).toFixed(1) : "0"}M+
+              </div>
+              <div className="text-sm text-white/40">Threads Discovered</div>
+            </div>
+            <div className="bg-white/[0.03] border border-white/8 rounded-2xl p-6 hover:border-emerald-500/30 transition-colors">
+              <div className="text-4xl font-black text-white mb-1">
+                {visible ? (engagements / 1000).toFixed(0) : "0"}k+
+              </div>
+              <div className="text-sm text-white/40">Engagements Posted</div>
+            </div>
+          </div>
         </div>
+
+        {/* ── Platform logos strip ── */}
+        <div>
+          <p className="text-center text-white/25 text-xs uppercase tracking-widest mb-6">Works across every major platform</p>
+          <div className="flex flex-wrap justify-center gap-3">
+            {platforms.map(p => (
+              <div
+                key={p.name}
+                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border ${p.bg} transition-all hover:scale-105`}
+              >
+                <p.icon className={`w-4 h-4 ${p.color}`} />
+                <span className="text-sm font-medium text-white/70">{p.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Testimonials ── */}
+        <div>
+          <p className="text-center text-white/25 text-xs uppercase tracking-widest mb-8">What our users say</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {testimonials.map((t) => (
+              <div
+                key={t.name}
+                className="bg-gradient-to-b from-white/[0.05] to-white/[0.02] border border-white/10 rounded-2xl p-6 flex flex-col gap-4 hover:border-white/20 transition-all hover:-translate-y-0.5"
+              >
+                {/* Stars */}
+                <div className="flex gap-0.5">
+                  {Array.from({ length: t.rating }).map((_, i) => (
+                    <Star key={i} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                  ))}
+                </div>
+                {/* Quote */}
+                <p className="text-white/70 text-sm leading-relaxed flex-1">&ldquo;{t.quote}&rdquo;</p>
+                {/* Author */}
+                <div className="flex items-center gap-3 pt-2 border-t border-white/8">
+                  <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${t.avatarColor} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
+                    {t.avatar}
+                  </div>
+                  <div>
+                    <div className="text-white text-sm font-semibold">{t.name}</div>
+                    <div className="text-white/40 text-xs">{t.role}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
       </div>
     </section>
   );
