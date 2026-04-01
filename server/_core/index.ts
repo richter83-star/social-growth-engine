@@ -10,6 +10,9 @@ import { serveStatic, setupVite } from "./vite";
 import { initScheduler } from "../scheduler";
 import Stripe from "stripe";
 import { upsertSubscription } from "../db";
+import { notifyOwner } from "./notification";
+
+const PLAN_PRICE: Record<string, number> = { free: 0, pro: 49, agency: 149 };
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -74,10 +77,32 @@ async function startServer() {
             currentPeriodEnd: new Date(periodEnd * 1000),
           });
           console.log(`[Webhook] Subscription activated for user ${userId} on plan ${plan}`);
+
+          // Notify owner of new paid subscription
+          try {
+            const customerName = session.metadata?.customer_name ?? session.customer_details?.name ?? "Unknown";
+            const customerEmail = session.metadata?.customer_email ?? session.customer_details?.email ?? "Unknown";
+            const mrr = PLAN_PRICE[plan] ?? 0;
+            await notifyOwner({
+              title: `New ${plan.charAt(0).toUpperCase() + plan.slice(1)} subscriber`,
+              content: `${customerName} (${customerEmail}) just subscribed to the ${plan.charAt(0).toUpperCase() + plan.slice(1)} plan ($${mrr}/mo). Check your Admin Dashboard for full details.`,
+            });
+          } catch (notifyErr) {
+            console.error("[Webhook] Failed to send owner notification:", notifyErr);
+          }
         }
       } else if (event.type === "customer.subscription.deleted") {
         const sub = event.data.object as Stripe.Subscription;
         console.log(`[Webhook] Subscription canceled for customer ${sub.customer}`);
+        // Notify owner of cancellation
+        try {
+          await notifyOwner({
+            title: "Subscription canceled",
+            content: `A subscriber (Stripe customer ${sub.customer}) has canceled their subscription. Review the Admin Dashboard → Customers tab for details.`,
+          });
+        } catch (notifyErr) {
+          console.error("[Webhook] Failed to send cancellation notification:", notifyErr);
+        }
         // Downgrade to free — would need to look up userId by customerId in a production system
       }
     } catch (err) {

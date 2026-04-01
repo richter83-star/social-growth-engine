@@ -179,3 +179,9 @@
 - [x] Frontend: Support tab — table of recent support sessions with preview and link to full conversation
 - [x] Frontend: System tab — health indicators, DB stats, scheduler status
 - [x] Tests: admin procedures return correct data and reject non-admin callers
+
+## New Signup Real-Time Notifications
+- [x] Wire notifyOwner into Stripe webhook: checkout.session.completed → owner ping with customer name, email, plan, and MRR impact
+- [x] Wire notifyOwner for subscription cancellation events (customer.subscription.deleted) → owner ping with churn alert
+- [x] Include plan tier, customer email, and cumulative MRR in the notification body
+- [x] Tests: verify notifyOwner is called with correct payload on new paid subscription
