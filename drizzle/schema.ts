@@ -202,3 +202,29 @@ export const subscriptions = mysqlTable("subscriptions", {
 
 export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = typeof subscriptions.$inferInsert;
+
+// Team members (role & permission system)
+export type TeamPermissions = {
+  canEdit: boolean;       // can edit AI-generated comments
+  canApprove: boolean;    // can approve comments
+  canReject: boolean;     // can reject comments
+  canDiscover: boolean;   // can trigger discovery runs
+  canManageCampaigns: boolean; // can create/edit/delete campaigns
+};
+
+export const teamMembers = mysqlTable("team_members", {
+  id: int("id").autoincrement().primaryKey(),
+  ownerId: int("ownerId").notNull(),           // the account owner who invited this member
+  memberId: int("memberId").notNull(),          // the invited user's id
+  memberEmail: varchar("memberEmail", { length: 320 }).notNull(),
+  memberName: varchar("memberName", { length: 256 }),
+  teamRole: mysqlEnum("teamRole", ["owner", "editor", "reviewer", "viewer"]).default("viewer").notNull(),
+  permissions: json("permissions").$type<TeamPermissions>().notNull(),
+  inviteToken: varchar("inviteToken", { length: 128 }),
+  inviteAccepted: boolean("inviteAccepted").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type TeamMember = typeof teamMembers.$inferSelect;
+export type InsertTeamMember = typeof teamMembers.$inferInsert;

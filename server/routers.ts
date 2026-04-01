@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
+import { teamRouter } from "./routers/team";
+import { resolvePermissions } from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
@@ -279,6 +281,18 @@ const engagementRouter = router({
       editedContent: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
+      // ── Permission guard ──────────────────────────────────────────────────
+      const perms = await resolvePermissions(ctx.user.id);
+      if (input.editedContent !== undefined && !perms.canEdit) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "You do not have permission to edit comments." });
+      }
+      if (input.status === "approved" && !perms.canApprove) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "You do not have permission to approve comments." });
+      }
+      if (input.status === "rejected" && !perms.canReject) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "You do not have permission to reject comments." });
+      }
+      // ─────────────────────────────────────────────────────────────────────
       const extra: Record<string, unknown> = {};
       // Persist edited content if provided
       if (input.editedContent !== undefined) {
@@ -321,6 +335,10 @@ const engagementRouter = router({
   bulkApprove: protectedProcedure
     .input(z.object({ ids: z.array(z.number()) }))
     .mutation(async ({ ctx, input }) => {
+      const perms = await resolvePermissions(ctx.user.id);
+      if (!perms.canApprove) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "You do not have permission to approve comments." });
+      }
       for (const id of input.ids) {
         await updateEngagementStatus(id, ctx.user.id, "approved");
       }
@@ -549,6 +567,7 @@ export const appRouter = router({
   notifications: notificationsRouter,
   schedules: schedulesRouter,
   billing: billingRouter,
+  team: teamRouter,
 });
 
 export type AppRouter = typeof appRouter;

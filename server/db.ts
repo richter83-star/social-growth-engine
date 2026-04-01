@@ -324,3 +324,78 @@ export async function updateSubscription(userId: number, data: Partial<InsertSub
   if (!db) throw new Error("DB unavailable");
   await db.update(subscriptions).set(data).where(eq(subscriptions.userId, userId));
 }
+
+// ─── Team Members ─────────────────────────────────────────────────────────────
+import { teamMembers, InsertTeamMember, TeamPermissions } from "../drizzle/schema";
+
+export const DEFAULT_PERMISSIONS: Record<string, TeamPermissions> = {
+  owner:    { canEdit: true,  canApprove: true,  canReject: true,  canDiscover: true,  canManageCampaigns: true },
+  editor:   { canEdit: true,  canApprove: false, canReject: false, canDiscover: true,  canManageCampaigns: false },
+  reviewer: { canEdit: false, canApprove: true,  canReject: true,  canDiscover: false, canManageCampaigns: false },
+  viewer:   { canEdit: false, canApprove: false, canReject: false, canDiscover: false, canManageCampaigns: false },
+};
+
+export async function getTeamMembersByOwner(ownerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(teamMembers).where(eq(teamMembers.ownerId, ownerId));
+}
+
+export async function getTeamMemberRecord(ownerId: number, memberId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(teamMembers)
+    .where(and(eq(teamMembers.ownerId, ownerId), eq(teamMembers.memberId, memberId)))
+    .limit(1);
+  return result[0];
+}
+
+/** Returns the team member record where this user is a member of someone else's team */
+export async function getMyTeamMembership(memberId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(teamMembers)
+    .where(and(eq(teamMembers.memberId, memberId), eq(teamMembers.inviteAccepted, true)))
+    .limit(1);
+  return result[0];
+}
+
+export async function upsertTeamMember(data: InsertTeamMember) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.insert(teamMembers).values(data).onDuplicateKeyUpdate({ set: { teamRole: data.teamRole, permissions: data.permissions, updatedAt: new Date() } });
+}
+
+export async function updateTeamMember(id: number, ownerId: number, data: Partial<InsertTeamMember>) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.update(teamMembers).set({ ...data, updatedAt: new Date() })
+    .where(and(eq(teamMembers.id, id), eq(teamMembers.ownerId, ownerId)));
+}
+
+export async function deleteTeamMember(id: number, ownerId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.delete(teamMembers).where(and(eq(teamMembers.id, id), eq(teamMembers.ownerId, ownerId)));
+}
+
+export async function acceptTeamInvite(token: string, memberId: number, memberName: string) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.update(teamMembers).set({ inviteAccepted: true, memberId, memberName, updatedAt: new Date() })
+    .where(eq(teamMembers.inviteToken, token));
+}
+
+/** Resolve effective permissions for a user.
+ *  - If the user is the owner of their own data, they get full owner permissions.
+ *  - If the user is a team member of another owner, return their assigned permissions.
+ *  - Otherwise return owner-level permissions (solo user). */
+export async function resolvePermissions(userId: number): Promise<TeamPermissions & { teamRole: string; ownerId: number }> {
+  // Check if this user is a member of someone else's team
+  const membership = await getMyTeamMembership(userId);
+  if (membership) {
+    return { ...membership.permissions, teamRole: membership.teamRole, ownerId: membership.ownerId };
+  }
+  // Solo user or owner — full permissions
+  return { ...DEFAULT_PERMISSIONS.owner, teamRole: "owner", ownerId: userId };
+}

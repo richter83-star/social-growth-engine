@@ -41,6 +41,20 @@ vi.mock("./db", () => ({
   getSubscriptionByUserId: vi.fn().mockResolvedValue(null),
   upsertSubscription: vi.fn().mockResolvedValue(undefined),
   updateSubscription: vi.fn().mockResolvedValue(undefined),
+  // Team
+  DEFAULT_PERMISSIONS: {
+    owner:    { canEdit: true,  canApprove: true,  canReject: true,  canDiscover: true,  canManageCampaigns: true },
+    editor:   { canEdit: true,  canApprove: false, canReject: false, canDiscover: true,  canManageCampaigns: false },
+    reviewer: { canEdit: false, canApprove: true,  canReject: true,  canDiscover: false, canManageCampaigns: false },
+    viewer:   { canEdit: false, canApprove: false, canReject: false, canDiscover: false, canManageCampaigns: false },
+  },
+  getTeamMembersByOwner: vi.fn().mockResolvedValue([]),
+  getTeamMemberRecord: vi.fn().mockResolvedValue(null),
+  upsertTeamMember: vi.fn().mockResolvedValue({ id: 1, ownerId: 1, memberId: null, memberEmail: "collab@example.com", teamRole: "reviewer", permissions: { canEdit: false, canApprove: true, canReject: true, canDiscover: false, canManageCampaigns: false }, inviteToken: "tok123", inviteAccepted: false, createdAt: new Date() }),
+  updateTeamMember: vi.fn().mockResolvedValue(undefined),
+  deleteTeamMember: vi.fn().mockResolvedValue(undefined),
+  resolvePermissions: vi.fn().mockResolvedValue({ teamRole: "owner", canEdit: true, canApprove: true, canReject: true, canDiscover: true, canManageCampaigns: true }),
+  getMyTeamMembership: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("./engagementEngine", () => ({
@@ -391,5 +405,111 @@ describe("engagement.updateStatus editedContent DB persistence", () => {
     expect(extra?.isEdited).toBeUndefined();
 
     spy.mockRestore();
+  });
+});
+
+// ─── Team & Permission System Tests ──────────────────────────────────────────
+describe("team", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("lists team members for authenticated user", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.team.list();
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it("returns owner permissions for the workspace owner", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.team.getMyPermissions();
+    expect(result).toMatchObject({
+      teamRole: "owner",
+      canEdit: true,
+      canApprove: true,
+      canReject: true,
+      canDiscover: true,
+      canManageCampaigns: true,
+    });
+  });
+
+  it("creates a team invite with reviewer role", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.team.invite({
+      memberEmail: "collab@example.com",
+      teamRole: "reviewer",
+      permissions: {
+        canEdit: false,
+        canApprove: true,
+        canReject: true,
+        canDiscover: false,
+        canManageCampaigns: false,
+      },
+    });
+    expect(result).toHaveProperty("token");
+    expect(result).toHaveProperty("inviteUrl");
+  });
+
+  it("blocks approve action when canApprove is false", async () => {
+    const db = await import("./db");
+    // Override resolvePermissions to return reviewer-without-approve
+    vi.mocked(db.resolvePermissions).mockResolvedValueOnce({
+      teamRole: "viewer",
+      canEdit: false,
+      canApprove: false,
+      canReject: false,
+      canDiscover: false,
+      canManageCampaigns: false,
+    });
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    await expect(
+      caller.engagement.updateStatus({ id: 10, status: "approved" })
+    ).rejects.toThrow("permission");
+  });
+
+  it("blocks edit action when canEdit is false", async () => {
+    const db = await import("./db");
+    vi.mocked(db.resolvePermissions).mockResolvedValueOnce({
+      teamRole: "reviewer",
+      canEdit: false,
+      canApprove: true,
+      canReject: true,
+      canDiscover: false,
+      canManageCampaigns: false,
+    });
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    await expect(
+      caller.engagement.updateStatus({ id: 11, status: "approved", editedContent: "Sneaky edit" })
+    ).rejects.toThrow("permission");
+  });
+
+  it("blocks reject action when canReject is false", async () => {
+    const db = await import("./db");
+    vi.mocked(db.resolvePermissions).mockResolvedValueOnce({
+      teamRole: "viewer",
+      canEdit: false,
+      canApprove: false,
+      canReject: false,
+      canDiscover: false,
+      canManageCampaigns: false,
+    });
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    await expect(
+      caller.engagement.updateStatus({ id: 12, status: "rejected" })
+    ).rejects.toThrow("permission");
+  });
+
+  it("allows approve when canApprove is true", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    // Default mock has canApprove: true (owner)
+    const result = await caller.engagement.updateStatus({ id: 20, status: "approved" });
+    expect(result).toBeUndefined();
   });
 });

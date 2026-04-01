@@ -73,3 +73,18 @@
 - [x] EngagementQueue: filter tabs — All / Pending / Approved / Rejected
 - [x] EngagementQueue: bulk approve all pending items button
 - [x] Tests: inline editor mutation test
+
+## Role & Permission System
+- [ ] DB: add `team_members` table (userId, ownerId, role: owner/editor/reviewer, permissions JSON)
+- [ ] DB: permissions JSON schema: { canEdit, canApprove, canReject, canDiscover, canManageCampaigns }
+- [ ] Backend: `teamRouter` — invite member, list members, update role/permissions, remove member
+- [ ] Backend: permission guard middleware — check user permissions before engagement mutations
+- [ ] Backend: engagement.updateStatus — gate edit/approve/reject by permission flags
+- [ ] Backend: `roles.getMyPermissions` — return current user's effective permissions
+- [ ] Frontend: Role Management page (/team) — list members, assign roles, toggle permissions
+- [ ] Frontend: Engagement Queue — hide Edit button if canEdit=false
+- [ ] Frontend: Engagement Queue — hide Approve button if canApprove=false
+- [ ] Frontend: Engagement Queue — hide Reject button if canReject=false
+- [ ] Frontend: Show permission-denied toast when action is blocked
+- [ ] Frontend: Add Team nav item to sidebar
+- [ ] Tests: permission guard tests (owner can do all, reviewer can only approve/reject, viewer blocked)

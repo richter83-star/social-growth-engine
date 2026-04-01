@@ -17,6 +17,7 @@ import {
   ExternalLink,
   CheckCheck,
   Loader2,
+  Shield,
 } from "lucide-react";
 
 type QueueItem = {
@@ -72,7 +73,9 @@ function ConfidenceBar({ score }: { score: number }) {
   );
 }
 
-function QueueCard({ item, onRefetch }: { item: QueueItem; onRefetch: () => void }) {
+type QueueCardPermissions = { canEdit: boolean; canApprove: boolean; canReject: boolean };
+
+function QueueCard({ item, onRefetch, permissions }: { item: QueueItem; onRefetch: () => void; permissions: QueueCardPermissions }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(item.editedContent ?? item.generatedComment);
   const [showReasoning, setShowReasoning] = useState(false);
@@ -95,6 +98,7 @@ function QueueCard({ item, onRefetch }: { item: QueueItem; onRefetch: () => void
   const hasEdits = (item.editedContent ?? item.generatedComment) !== item.generatedComment;
   const charCount = activeContent.length;
   const isPending = item.status === "pending";
+  const { canEdit, canApprove, canReject } = permissions;
 
   function handleApprove() {
     const payload: { id: number; status: "approved"; editedContent?: string } = {
@@ -188,7 +192,7 @@ function QueueCard({ item, onRefetch }: { item: QueueItem; onRefetch: () => void
                 </Button>
               </a>
             )}
-            {isPending && !isEditing && (
+            {isPending && !isEditing && canEdit && (
               <Button
                 size="icon"
                 variant="ghost"
@@ -232,7 +236,7 @@ function QueueCard({ item, onRefetch }: { item: QueueItem; onRefetch: () => void
             )}
           </div>
 
-          {isEditing ? (
+          {isEditing && canEdit ? (
             <div className="space-y-2">
               <Textarea
                 value={editText}
@@ -259,16 +263,16 @@ function QueueCard({ item, onRefetch }: { item: QueueItem; onRefetch: () => void
             </div>
           ) : (
             <div
-              className={`rounded-lg p-3.5 text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap cursor-text border transition-colors ${
-                isPending
-                  ? "bg-muted/40 border-border hover:border-primary/30 hover:bg-muted/60"
-                  : "bg-muted/20 border-transparent"
+              className={`rounded-lg p-3.5 text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap border transition-colors ${
+                isPending && canEdit
+                  ? "bg-muted/40 border-border hover:border-primary/30 hover:bg-muted/60 cursor-text"
+                  : "bg-muted/20 border-transparent cursor-default"
               }`}
-              onClick={() => isPending && setIsEditing(true)}
-              title={isPending ? "Click to edit" : undefined}
+              onClick={() => isPending && canEdit && setIsEditing(true)}
+              title={isPending && canEdit ? "Click to edit" : undefined}
             >
               {activeContent}
-              {isPending && (
+              {isPending && canEdit && (
                 <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-muted-foreground/60">
                   <Pencil className="h-2.5 w-2.5" /> click to edit
                 </span>
@@ -306,27 +310,37 @@ function QueueCard({ item, onRefetch }: { item: QueueItem; onRefetch: () => void
         )}
 
         {/* Action buttons */}
-        {isPending && !isEditing && (
+        {isPending && !isEditing && (canApprove || canReject) && (
           <div className="flex gap-2 pt-1">
-            <Button
-              className="flex-1 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-              size="sm"
-              onClick={handleApprove}
-              disabled={isBusy}
-            >
-              {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-              Approve
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1 gap-2 border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-400"
-              onClick={handleReject}
-              disabled={isBusy}
-            >
-              <X className="h-3.5 w-3.5" />
-              Reject
-            </Button>
+            {canApprove && (
+              <Button
+                className="flex-1 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                size="sm"
+                onClick={handleApprove}
+                disabled={isBusy}
+              >
+                {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                Approve
+              </Button>
+            )}
+            {canReject && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 gap-2 border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-400"
+                onClick={handleReject}
+                disabled={isBusy}
+              >
+                <X className="h-3.5 w-3.5" />
+                Reject
+              </Button>
+            )}
+          </div>
+        )}
+        {isPending && !isEditing && !canApprove && !canReject && (
+          <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2 border border-dashed border-border/60">
+            <Shield className="h-3.5 w-3.5 shrink-0" />
+            You have view-only access. Contact your workspace owner to approve or reject comments.
           </div>
         )}
       </CardContent>
@@ -337,6 +351,12 @@ function QueueCard({ item, onRefetch }: { item: QueueItem; onRefetch: () => void
 export default function EngagementQueue() {
   const [activeTab, setActiveTab] = useState<FilterTab>("pending");
   const utils = trpc.useUtils();
+  const { data: myPerms } = trpc.team.getMyPermissions.useQuery();
+  const permissions: QueueCardPermissions = {
+    canEdit: myPerms?.canEdit ?? true,
+    canApprove: myPerms?.canApprove ?? true,
+    canReject: myPerms?.canReject ?? true,
+  };
 
   const { data: allItems, isLoading, refetch } = trpc.engagement.getQueue.useQuery(
     { status: activeTab === "all" ? undefined : activeTab },
@@ -377,7 +397,7 @@ export default function EngagementQueue() {
             Review, edit, and approve AI-generated comments before they go live
           </p>
         </div>
-        {pendingCount > 0 && (
+        {pendingCount > 0 && permissions.canApprove && (
           <Button
             variant="outline"
             size="sm"
@@ -450,6 +470,7 @@ export default function EngagementQueue() {
               key={item.id}
               item={item as QueueItem}
               onRefetch={() => refetch()}
+              permissions={permissions}
             />
           ))}
         </div>
