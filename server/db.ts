@@ -29,7 +29,7 @@ export async function getDb() {
   return _db;
 }
 
-// ─── Users ────────────────────────────────────────────────────────────────────
+// --- Users --------------------------------------------------------------------
 
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) throw new Error("User openId is required for upsert");
@@ -60,7 +60,7 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// ─── Social Accounts ──────────────────────────────────────────────────────────
+// --- Social Accounts ----------------------------------------------------------
 
 export async function getAccountsByUser(userId: number) {
   const db = await getDb();
@@ -90,7 +90,7 @@ export async function deleteAccount(id: number, userId: number) {
   await db.delete(socialAccounts).where(and(eq(socialAccounts.id, id), eq(socialAccounts.userId, userId)));
 }
 
-// ─── Campaigns ────────────────────────────────────────────────────────────────
+// --- Campaigns ----------------------------------------------------------------
 
 export async function getCampaignsByUser(userId: number) {
   const db = await getDb();
@@ -127,7 +127,7 @@ export async function deleteCampaign(id: number, userId: number) {
   await db.delete(campaigns).where(and(eq(campaigns.id, id), eq(campaigns.userId, userId)));
 }
 
-// ─── Discovered Threads ───────────────────────────────────────────────────────
+// --- Discovered Threads -------------------------------------------------------
 
 export async function getThreadsByCampaign(campaignId: number, userId: number) {
   const db = await getDb();
@@ -162,7 +162,7 @@ export async function updateThread(id: number, data: Partial<InsertDiscoveredThr
   await db.update(discoveredThreads).set(data).where(eq(discoveredThreads.id, id));
 }
 
-// ─── Engagement Queue ─────────────────────────────────────────────────────────
+// --- Engagement Queue ---------------------------------------------------------
 
 export async function getQueueByUser(userId: number, status?: string) {
   const db = await getDb();
@@ -188,7 +188,7 @@ export async function updateEngagementStatus(id: number, userId: number, status:
   await db.update(engagementQueue).set({ status, ...extra }).where(and(eq(engagementQueue.id, id), eq(engagementQueue.userId, userId)));
 }
 
-// ─── Performance Metrics ──────────────────────────────────────────────────────
+// --- Performance Metrics ------------------------------------------------------
 
 export async function getMetricsByUser(userId: number, days = 30) {
   const db = await getDb();
@@ -222,7 +222,7 @@ export async function getDashboardSummary(userId: number) {
   };
 }
 
-// ─── Notifications ────────────────────────────────────────────────────────────
+// --- Notifications ------------------------------------------------------------
 
 export async function getNotificationsByUser(userId: number, limit = 30) {
   const db = await getDb();
@@ -248,7 +248,7 @@ export async function markAllNotificationsRead(userId: number) {
   await db.update(notifications).set({ isRead: true }).where(eq(notifications.userId, userId));
 }
 
-// ─── Learning Outcomes ────────────────────────────────────────────────────────
+// --- Learning Outcomes --------------------------------------------------------
 
 export async function getLearningInsights(userId: number) {
   const db = await getDb();
@@ -262,7 +262,7 @@ export async function createLearningOutcome(data: InsertLearningOutcome) {
   await db.insert(learningOutcomes).values(data);
 }
 
-// ─── Campaign Schedules ───────────────────────────────────────────────────────
+// --- Campaign Schedules -------------------------------------------------------
 
 export async function getSchedulesByUser(userId: number) {
   const db = await getDb();
@@ -305,7 +305,7 @@ export async function deleteSchedule(id: number, userId: number) {
   await db.delete(campaignSchedules).where(and(eq(campaignSchedules.id, id), eq(campaignSchedules.userId, userId)));
 }
 
-// ─── Subscriptions ────────────────────────────────────────────────────────────
+// --- Subscriptions ------------------------------------------------------------
 
 export async function getSubscriptionByUserId(userId: number) {
   const db = await getDb();
@@ -326,7 +326,7 @@ export async function updateSubscription(userId: number, data: Partial<InsertSub
   await db.update(subscriptions).set(data).where(eq(subscriptions.userId, userId));
 }
 
-// ─── Team Members ─────────────────────────────────────────────────────────────
+// --- Team Members -------------------------------------------------------------
 import { teamMembers, InsertTeamMember, TeamPermissions } from "../drizzle/schema";
 
 export const DEFAULT_PERMISSIONS: Record<string, TeamPermissions> = {
@@ -387,7 +387,7 @@ export async function acceptTeamInvite(token: string, memberId: number, memberNa
     .where(eq(teamMembers.inviteToken, token));
 }
 
-// ─── Support Chat ────────────────────────────────────────────────────────────
+// --- Support Chat ------------------------------------------------------------
 
 export async function getSupportHistory(sessionId: string, limit = 20) {
   const db = await getDb();
@@ -420,4 +420,186 @@ export async function resolvePermissions(userId: number): Promise<TeamPermission
   }
   // Solo user or owner — full permissions
   return { ...DEFAULT_PERMISSIONS.owner, teamRole: "owner", ownerId: userId };
+}
+
+// --- Admin Queries -----------------------------------------------------------
+
+export async function adminGetOverview() {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const { count, eq, gte } = await import("drizzle-orm");
+
+  const now = new Date();
+  const ago7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const ago30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const [totalUsers] = await db.select({ c: count() }).from(users);
+  const [newUsers7d] = await db.select({ c: count() }).from(users).where(gte(users.createdAt, ago7));
+  const [newUsers30d] = await db.select({ c: count() }).from(users).where(gte(users.createdAt, ago30));
+
+  const allSubs = await db.select().from(subscriptions);
+  const planCounts = { free: 0, pro: 0, agency: 0 };
+  let activePaid = 0, canceledPaid = 0;
+  for (const s of allSubs) {
+    planCounts[s.plan as keyof typeof planCounts] = (planCounts[s.plan as keyof typeof planCounts] ?? 0) + 1;
+    if (s.plan !== "free" && s.status === "active") activePaid++;
+    if (s.plan !== "free" && s.status === "canceled") canceledPaid++;
+  }
+  const PLAN_PRICE = { free: 0, pro: 49, agency: 149 };
+  const mrr = allSubs.filter(s => s.status === "active" && s.plan !== "free")
+    .reduce((sum, s) => sum + (PLAN_PRICE[s.plan as keyof typeof PLAN_PRICE] ?? 0), 0);
+
+  const [totalCampaigns] = await db.select({ c: count() }).from(campaigns);
+  const [totalAccounts] = await db.select({ c: count() }).from(socialAccounts);
+  const [totalEngagements] = await db.select({ c: count() }).from(engagementQueue);
+  const [approvedEngagements] = await db.select({ c: count() }).from(engagementQueue).where(eq(engagementQueue.status, "approved"));
+
+  return {
+    totalUsers: totalUsers.c, newUsers7d: newUsers7d.c, newUsers30d: newUsers30d.c,
+    activePaidSubs: activePaid, canceledPaidSubs: canceledPaid, planCounts,
+    mrr, arr: mrr * 12,
+    totalCampaigns: totalCampaigns.c, totalAccounts: totalAccounts.c,
+    totalEngagements: totalEngagements.c, approvedEngagements: approvedEngagements.c,
+  };
+}
+
+export async function adminGetUsers(page = 1, limit = 25, search = "") {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const { count, like, desc, or, inArray } = await import("drizzle-orm");
+
+  const offset = (page - 1) * limit;
+  const where = search ? or(like(users.name, `%${search}%`), like(users.email, `%${search}%`)) : undefined;
+
+  const rows = await db.select().from(users).where(where).orderBy(desc(users.createdAt)).limit(limit).offset(offset);
+  const [total] = await db.select({ c: count() }).from(users).where(where);
+
+  const userIds = rows.map(u => u.id);
+  const subs = userIds.length ? await db.select().from(subscriptions).where(inArray(subscriptions.userId, userIds)) : [];
+  const subMap = Object.fromEntries(subs.map(s => [s.userId, s]));
+
+  const acctCounts = userIds.length
+    ? await db.select({ userId: socialAccounts.userId, c: count() }).from(socialAccounts).where(inArray(socialAccounts.userId, userIds)).groupBy(socialAccounts.userId)
+    : [];
+  const acctMap = Object.fromEntries(acctCounts.map(a => [a.userId, a.c]));
+
+  const campCounts = userIds.length
+    ? await db.select({ userId: campaigns.userId, c: count() }).from(campaigns).where(inArray(campaigns.userId, userIds)).groupBy(campaigns.userId)
+    : [];
+  const campMap = Object.fromEntries(campCounts.map(c => [c.userId, c.c]));
+
+  return {
+    users: rows.map(u => ({ ...u, subscription: subMap[u.id] ?? null, accountCount: acctMap[u.id] ?? 0, campaignCount: campMap[u.id] ?? 0 })),
+    total: total.c, page, pages: Math.ceil(total.c / limit),
+  };
+}
+
+export async function adminGetUserDetail(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const { eq, desc } = await import("drizzle-orm");
+
+  const [user] = await db.select().from(users).where(eq(users.id, userId));
+  if (!user) return null;
+  const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.userId, userId));
+  const accounts = await db.select().from(socialAccounts).where(eq(socialAccounts.userId, userId));
+  const userCampaigns = await db.select().from(campaigns).where(eq(campaigns.userId, userId));
+  const queueItems = await db.select().from(engagementQueue).where(eq(engagementQueue.userId, userId));
+  const supportSessions = await db.select().from(supportMessages).where(eq(supportMessages.userId, userId)).orderBy(desc(supportMessages.createdAt)).limit(20);
+
+  return {
+    user, subscription: sub ?? null, accounts, campaigns: userCampaigns,
+    queueStats: {
+      total: queueItems.length,
+      pending: queueItems.filter(q => q.status === "pending").length,
+      approved: queueItems.filter(q => q.status === "approved").length,
+      rejected: queueItems.filter(q => q.status === "rejected").length,
+    },
+    supportSessions,
+  };
+}
+
+export async function adminGetRevenueMetrics() {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const { gte, eq } = await import("drizzle-orm");
+  const PLAN_PRICE = { free: 0, pro: 49, agency: 149 };
+
+  const ago30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const recentSubs = await db.select().from(subscriptions).where(gte(subscriptions.createdAt, ago30));
+  const dailyMap: Record<string, number> = {};
+  for (const s of recentSubs) {
+    if (s.plan === "free") continue;
+    const day = s.createdAt.toISOString().slice(0, 10);
+    dailyMap[day] = (dailyMap[day] ?? 0) + (PLAN_PRICE[s.plan as keyof typeof PLAN_PRICE] ?? 0);
+  }
+  const dailyRevenue = Object.entries(dailyMap).sort(([a], [b]) => a.localeCompare(b)).map(([date, amount]) => ({ date, amount }));
+
+  const allActive = await db.select().from(subscriptions).where(eq(subscriptions.status, "active"));
+  const planDist = { free: 0, pro: 0, agency: 0 };
+  for (const s of allActive) planDist[s.plan as keyof typeof planDist]++;
+
+  const allSubs = await db.select().from(subscriptions);
+  const topCustomers = await Promise.all(
+    allSubs.filter(s => s.plan !== "free").map(async s => {
+      const [u] = await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, s.userId));
+      const monthsActive = Math.max(1, Math.round((Date.now() - s.createdAt.getTime()) / (30 * 24 * 60 * 60 * 1000)));
+      return { userId: s.userId, name: u?.name ?? "Unknown", email: u?.email ?? "", plan: s.plan, ltv: monthsActive * (PLAN_PRICE[s.plan as keyof typeof PLAN_PRICE] ?? 0), monthsActive };
+    })
+  );
+  topCustomers.sort((a, b) => b.ltv - a.ltv);
+  return { dailyRevenue, planDistribution: planDist, topCustomers: topCustomers.slice(0, 10) };
+}
+
+export async function adminGetSupportActivity(limit = 20) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const { desc, count, eq } = await import("drizzle-orm");
+
+  const sessions = await db.select().from(supportMessages).orderBy(desc(supportMessages.createdAt)).limit(limit * 5);
+  const seen = new Set<string>();
+  const unique: typeof sessions = [];
+  for (const s of sessions) { if (!seen.has(s.sessionId)) { seen.add(s.sessionId); unique.push(s); } }
+
+  return Promise.all(unique.slice(0, limit).map(async s => {
+    const [msgCount] = await db.select({ c: count() }).from(supportMessages).where(eq(supportMessages.sessionId, s.sessionId));
+    let userName: string | null = null, userEmail: string | null = null;
+    if (s.userId) {
+      const [u] = await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, s.userId));
+      userName = u?.name ?? null; userEmail = u?.email ?? null;
+    }
+    return { ...s, messageCount: msgCount.c, userName, userEmail };
+  }));
+}
+
+export async function adminGetSystemHealth() {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const { count, eq } = await import("drizzle-orm");
+
+  const [userCount] = await db.select({ c: count() }).from(users);
+  const [subCount] = await db.select({ c: count() }).from(subscriptions);
+  const [campaignCount] = await db.select({ c: count() }).from(campaigns);
+  const [threadCount] = await db.select({ c: count() }).from(discoveredThreads);
+  const [queueCount] = await db.select({ c: count() }).from(engagementQueue);
+  const [pendingQueue] = await db.select({ c: count() }).from(engagementQueue).where(eq(engagementQueue.status, "pending"));
+  const [accountCount] = await db.select({ c: count() }).from(socialAccounts);
+  const [supportCount] = await db.select({ c: count() }).from(supportMessages);
+
+  return {
+    dbStatus: "healthy" as const,
+    tables: {
+      users: userCount.c, subscriptions: subCount.c, campaigns: campaignCount.c,
+      threads: threadCount.c, queueTotal: queueCount.c, queuePending: pendingQueue.c,
+      accounts: accountCount.c, supportMessages: supportCount.c,
+    },
+    timestamp: new Date(),
+  };
+}
+
+export async function adminUpdateUserPlan(userId: number, plan: "free" | "pro" | "agency") {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const { eq } = await import("drizzle-orm");
+  await db.update(subscriptions).set({ plan, status: "active", updatedAt: new Date() }).where(eq(subscriptions.userId, userId));
 }

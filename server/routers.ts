@@ -5,7 +5,7 @@ import { teamRouter } from "./routers/team";
 import { resolvePermissions } from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
 import {
   getAccountsByUser, createAccount, updateAccount, deleteAccount,
   getCampaignsByUser, getCampaignById, createCampaign, updateCampaign, deleteCampaign,
@@ -21,15 +21,20 @@ import {
 import { notifyOwner } from "./_core/notification";
 import { registerSchedule, stopSchedule, triggerScheduleNow } from "./scheduler";
 import {
-  getSchedulesByUser, createSchedule, updateSchedule as updateScheduleDb, deleteSchedule,
+  getSchedulesByUser, createSchedule, updateSchedule as updateScheduleDb, deleteSchedule as deleteScheduleDb,
+} from "./db";
+import {
   getSubscriptionByUserId, upsertSubscription, updateSubscription,
   getSupportHistory, saveSupportMessage,
+  adminGetOverview, adminGetUsers, adminGetUserDetail,
+  adminGetRevenueMetrics, adminGetSupportActivity,
+  adminGetSystemHealth, adminUpdateUserPlan,
 } from "./db";
 import { invokeLLM } from "./_core/llm";
 import Stripe from "stripe";
 import { PLAN_LIMITS, STRIPE_PRICES } from "./products";
 
-// ─── Accounts Router ──────────────────────────────────────────────────────────
+// --- Accounts Router ----------------------------------------------------------
 const accountsRouter = router({
   list: protectedProcedure.query(({ ctx }) => getAccountsByUser(ctx.user.id)),
 
@@ -75,7 +80,7 @@ const accountsRouter = router({
     .mutation(({ ctx, input }) => deleteAccount(input.id, ctx.user.id)),
 });
 
-// ─── Campaigns Router ─────────────────────────────────────────────────────────
+// --- Campaigns Router ---------------------------------------------------------
 const campaignsRouter = router({
   list: protectedProcedure.query(({ ctx }) => getCampaignsByUser(ctx.user.id)),
 
@@ -155,7 +160,7 @@ const campaignsRouter = router({
     .mutation(({ ctx, input }) => deleteCampaign(input.id, ctx.user.id)),
 });
 
-// ─── Discovery Router ─────────────────────────────────────────────────────────
+// --- Discovery Router ---------------------------------------------------------
 const discoveryRouter = router({
   getThreads: protectedProcedure
     .input(z.object({ campaignId: z.number() }))
@@ -216,7 +221,7 @@ const discoveryRouter = router({
     }),
 });
 
-// ─── Engagement Router ────────────────────────────────────────────────────────
+// --- Engagement Router --------------------------------------------------------
 const engagementRouter = router({
   getQueue: protectedProcedure
     .input(z.object({ status: z.string().optional() }))
@@ -283,7 +288,7 @@ const engagementRouter = router({
       editedContent: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      // ── Permission guard ──────────────────────────────────────────────────
+      // -- Permission guard --------------------------------------------------
       const perms = await resolvePermissions(ctx.user.id);
       if (input.editedContent !== undefined && !perms.canEdit) {
         throw new TRPCError({ code: "FORBIDDEN", message: "You do not have permission to edit comments." });
@@ -294,7 +299,7 @@ const engagementRouter = router({
       if (input.status === "rejected" && !perms.canReject) {
         throw new TRPCError({ code: "FORBIDDEN", message: "You do not have permission to reject comments." });
       }
-      // ─────────────────────────────────────────────────────────────────────
+      // ---------------------------------------------------------------------
       const extra: Record<string, unknown> = {};
       // Persist edited content if provided
       if (input.editedContent !== undefined) {
@@ -398,7 +403,7 @@ const engagementRouter = router({
     }),
 });
 
-// ─── Analytics Router ─────────────────────────────────────────────────────────
+// --- Analytics Router ---------------------------------------------------------
 const analyticsRouter = router({
   summary: protectedProcedure.query(({ ctx }) => getDashboardSummary(ctx.user.id)),
 
@@ -464,7 +469,7 @@ const analyticsRouter = router({
   }),
 });
 
-// ─── Notifications Router ─────────────────────────────────────────────────────
+// --- Notifications Router -----------------------------------------------------
 const notificationsRouter = router({
   list: protectedProcedure
     .input(z.object({ limit: z.number().default(30) }))
@@ -478,7 +483,7 @@ const notificationsRouter = router({
     .mutation(({ ctx }) => markAllNotificationsRead(ctx.user.id)),
 });
 
-// ─── Schedules Router ────────────────────────────────────────────────────────
+// --- Schedules Router --------------------------------------------------------
 const schedulesRouter = router({
   list: protectedProcedure.query(({ ctx }) => getSchedulesByUser(ctx.user.id)),
 
@@ -534,7 +539,7 @@ const schedulesRouter = router({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       stopSchedule(input.id);
-      await deleteSchedule(input.id, ctx.user.id);
+      await deleteScheduleDb(input.id, ctx.user.id);
       return { success: true };
     }),
 
@@ -545,7 +550,7 @@ const schedulesRouter = router({
     }),
 });
 
-// ─── Billing Router ───────────────────────────────────────────────────────────
+// --- Billing Router -----------------------------------------------------------
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "", { apiVersion: "2026-03-25.dahlia" });
 
 const billingRouter = router({
@@ -600,7 +605,7 @@ const billingRouter = router({
   }),
 });
 
-// ─── Support Chat Router ───────────────────────────────────────────────────────────
+// --- Support Chat Router -----------------------------------------------------------
 const SUPPORT_SYSTEM_PROMPT = `You are a friendly, knowledgeable support agent for Growth Engine — an AI-powered social media growth platform. Your job is to help users understand the product, troubleshoot issues, and make the most of their subscription.
 
 ## Product Overview
@@ -683,7 +688,35 @@ const supportRouter = router({
     }),
 });
 
-// ─── App Router ─────────────────────────────────────────────────────────────
+// --- Admin Router -----------------------------------------------------------
+const adminRouter = router({
+  getOverview: adminProcedure.query(async () => adminGetOverview()),
+
+  getUsers: adminProcedure
+    .input(z.object({ page: z.number().min(1).default(1), limit: z.number().min(1).max(100).default(25), search: z.string().default("") }))
+    .query(async ({ input }) => adminGetUsers(input.page, input.limit, input.search)),
+
+  getUserDetail: adminProcedure
+    .input(z.object({ userId: z.number() }))
+    .query(async ({ input }) => adminGetUserDetail(input.userId)),
+
+  getRevenueMetrics: adminProcedure.query(async () => adminGetRevenueMetrics()),
+
+  getSupportActivity: adminProcedure
+    .input(z.object({ limit: z.number().min(1).max(100).default(20) }))
+    .query(async ({ input }) => adminGetSupportActivity(input.limit)),
+
+  getSystemHealth: adminProcedure.query(async () => adminGetSystemHealth()),
+
+  updateUserPlan: adminProcedure
+    .input(z.object({ userId: z.number(), plan: z.enum(["free", "pro", "agency"]) }))
+    .mutation(async ({ input }) => {
+      await adminUpdateUserPlan(input.userId, input.plan);
+      return { success: true };
+    }),
+});
+
+// --- App Router -------------------------------------------------------------
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -704,6 +737,7 @@ export const appRouter = router({
   billing: billingRouter,
   team: teamRouter,
   support: supportRouter,
+  admin: adminRouter,
 });
 
 export type AppRouter = typeof appRouter;

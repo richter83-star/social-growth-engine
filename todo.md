@@ -160,3 +160,22 @@
 - [x] Backend: Update Stripe checkout success_url to point to /billing/success?session_id={CHECKOUT_SESSION_ID}
 - [x] Route: Register /billing/success in App.tsx inside DashboardRouter
 - [x] Tests: BillingSuccess renders correct plan name and CTAs
+
+## Super Admin Dashboard (/admin)
+- [x] Backend: adminProcedure guard — only owner (OWNER_OPEN_ID) can access
+- [x] Backend: admin.getOverview — total users, MRR, ARR, active subs, churn rate, new signups (7d/30d)
+- [x] Backend: admin.getUsers — paginated user list with plan, status, joined date, last active, account count, campaign count, engagement count
+- [x] Backend: admin.getUserDetail — single user deep-dive: subscription history, accounts, campaigns, queue stats, support messages
+- [x] Backend: admin.getRevenueMetrics — daily/weekly MRR trend, plan distribution (free/pro/agency counts), lifetime value
+- [x] Backend: admin.getSupportActivity — recent support chat sessions with message count and last message preview
+- [x] Backend: admin.getSystemHealth — DB row counts, scheduler status, queue backlog size
+- [x] Backend: admin.updateUserPlan — manually override a user's plan (for comps/refunds)
+- [x] Frontend: /admin route — owner-only, redirects non-admins to /dashboard
+- [x] Frontend: Admin sidebar with sections: Overview, Customers, Revenue, Support, System
+- [x] Frontend: Overview tab — KPI cards (MRR, ARR, total users, active subs, churn), sparkline charts, new signups trend
+- [x] Frontend: Customers tab — searchable/sortable table with plan badge, status, joined date, actions (view detail, change plan)
+- [x] Frontend: Customer detail drawer — full profile, subscription timeline, connected accounts, campaign list, support history
+- [x] Frontend: Revenue tab — MRR trend line chart, plan distribution donut chart, top customers by LTV
+- [x] Frontend: Support tab — table of recent support sessions with preview and link to full conversation
+- [x] Frontend: System tab — health indicators, DB stats, scheduler status
+- [x] Tests: admin procedures return correct data and reject non-admin callers
