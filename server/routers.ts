@@ -603,6 +603,39 @@ const billingRouter = router({
     const plan = (sub?.plan ?? "free") as keyof typeof PLAN_LIMITS;
     return { plan, limits: PLAN_LIMITS[plan] };
   }),
+
+  cancelSubscription: protectedProcedure.mutation(async ({ ctx }) => {
+    const sub = await getSubscriptionByUserId(ctx.user.id);
+    if (!sub?.stripeSubscriptionId) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "No active subscription found" });
+    }
+    if (sub.cancelAtPeriodEnd) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Subscription is already set to cancel" });
+    }
+    // Tell Stripe to cancel at end of current billing period (not immediately)
+    await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+      cancel_at_period_end: true,
+    });
+    // Reflect in DB
+    await updateSubscription(ctx.user.id, { cancelAtPeriodEnd: true });
+    return { success: true, cancelAtPeriodEnd: true, currentPeriodEnd: sub.currentPeriodEnd };
+  }),
+
+  reactivateSubscription: protectedProcedure.mutation(async ({ ctx }) => {
+    const sub = await getSubscriptionByUserId(ctx.user.id);
+    if (!sub?.stripeSubscriptionId) {
+      throw new TRPCError({ code: "NOT_FOUND", message: "No active subscription found" });
+    }
+    if (!sub.cancelAtPeriodEnd) {
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Subscription is not scheduled for cancellation" });
+    }
+    // Undo the cancel_at_period_end flag in Stripe
+    await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+      cancel_at_period_end: false,
+    });
+    await updateSubscription(ctx.user.id, { cancelAtPeriodEnd: false });
+    return { success: true, cancelAtPeriodEnd: false };
+  }),
 });
 
 // --- Support Chat Router -----------------------------------------------------------

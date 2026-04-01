@@ -185,3 +185,13 @@
 - [x] Wire notifyOwner for subscription cancellation events (customer.subscription.deleted) → owner ping with churn alert
 - [x] Include plan tier, customer email, and cumulative MRR in the notification body
 - [x] Tests: verify notifyOwner is called with correct payload on new paid subscription
+
+## Subscription Cancellation
+- [x] Backend: billing.cancelSubscription protectedProcedure — calls Stripe cancelAtPeriodEnd, updates DB status to "canceling", returns updated subscription
+- [x] Backend: billing.reactivateSubscription protectedProcedure — re-enables a cancel_at_period_end subscription before it expires
+- [x] Backend: DB helper updateSubscriptionStatus to set cancel_at_period_end flag and status
+- [x] Frontend: Billing page — "Cancel Subscription" button visible only for active paid plans
+- [x] Frontend: Confirmation dialog with plan name, end date, feature loss warning, and "Keep Plan" / "Cancel Subscription" actions
+- [x] Frontend: Post-cancel state — shows "Cancels on [date]" badge with Reactivate option
+- [x] Frontend: Optimistic UI update so the page reflects cancellation immediately without full reload
+- [x] Tests: cancelSubscription calls Stripe and updates DB; reactivateSubscription reverses it; non-subscriber gets FORBIDDEN
