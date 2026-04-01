@@ -98,6 +98,8 @@ export const engagementQueue = mysqlTable("engagement_queue", {
   userId: int("userId").notNull(),
   accountId: int("accountId"),
   generatedComment: text("generatedComment").notNull(),
+  editedContent: text("editedContent"),
+  isEdited: boolean("isEdited").default(false).notNull(),
   commentTone: varchar("commentTone", { length: 64 }),
   confidenceScore: float("confidenceScore").default(0), // 0-10
   status: mysqlEnum("status", ["pending", "approved", "rejected", "posted", "failed"]).default("pending").notNull(),

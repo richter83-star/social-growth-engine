@@ -1,241 +1,459 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { MessageSquareMore, CheckCircle, XCircle, Send, Bot, Loader2, Filter } from "lucide-react";
+import {
+  MessageSquareMore,
+  Check,
+  X,
+  Pencil,
+  RotateCcw,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  CheckCheck,
+  Loader2,
+} from "lucide-react";
 
-const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-amber-500/20 text-amber-400",
-  approved: "bg-blue-500/20 text-blue-400",
-  rejected: "bg-red-500/20 text-red-400",
-  posted: "bg-emerald-500/20 text-emerald-400",
-  failed: "bg-muted text-muted-foreground",
+type QueueItem = {
+  id: number;
+  generatedComment: string;
+  editedContent?: string | null;
+  isEdited?: boolean;
+  commentTone?: string | null;
+  confidenceScore?: number | null;
+  aiReasoning?: string | null;
+  status: string;
+  threadId: number;
+  campaignId: number;
+  createdAt: Date;
+  threadTitle?: string;
+  threadUrl?: string;
+  platform?: string;
 };
 
 const TONE_COLORS: Record<string, string> = {
-  helpful: "bg-emerald-500/10 text-emerald-400",
-  insightful: "bg-blue-500/10 text-blue-400",
-  empathetic: "bg-violet-500/10 text-violet-400",
-  educational: "bg-amber-500/10 text-amber-400",
-  conversational: "bg-teal-500/10 text-teal-400",
+  helpful: "bg-emerald-500/20 text-emerald-400",
+  curious: "bg-sky-500/20 text-sky-400",
+  authoritative: "bg-violet-500/20 text-violet-400",
+  empathetic: "bg-pink-500/20 text-pink-400",
+  analytical: "bg-amber-500/20 text-amber-400",
 };
 
-export default function EngagementQueue() {
-  const utils = trpc.useUtils();
-  const [statusFilter, setStatusFilter] = useState("pending");
+const STATUS_COLORS: Record<string, string> = {
+  pending: "bg-amber-500/20 text-amber-400",
+  approved: "bg-emerald-500/20 text-emerald-400",
+  rejected: "bg-red-500/20 text-red-400",
+  posted: "bg-blue-500/20 text-blue-400",
+};
 
-  const { data: queue, isLoading } = trpc.engagement.getQueue.useQuery({ status: statusFilter || undefined });
+const PLATFORM_COLORS: Record<string, string> = {
+  twitter: "bg-sky-500/20 text-sky-400",
+  reddit: "bg-orange-500/20 text-orange-400",
+  linkedin: "bg-blue-500/20 text-blue-400",
+};
+
+type FilterTab = "all" | "pending" | "approved" | "rejected" | "posted";
+
+function ConfidenceBar({ score }: { score: number }) {
+  const pct = Math.round((score / 10) * 100);
+  const color = pct >= 75 ? "bg-emerald-500" : pct >= 50 ? "bg-amber-500" : "bg-red-500";
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-xs text-muted-foreground tabular-nums w-7 text-right">{score.toFixed(1)}</span>
+    </div>
+  );
+}
+
+function QueueCard({ item, onRefetch }: { item: QueueItem; onRefetch: () => void }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(item.editedContent ?? item.generatedComment);
+  const [showReasoning, setShowReasoning] = useState(false);
+  const utils = trpc.useUtils();
+
+  // Keep editText in sync when item changes (e.g. after refetch)
+  useEffect(() => {
+    setEditText(item.editedContent ?? item.generatedComment);
+  }, [item.editedContent, item.generatedComment]);
 
   const updateMutation = trpc.engagement.updateStatus.useMutation({
-    onSuccess: (_, vars) => {
+    onSuccess: () => {
       utils.engagement.getQueue.invalidate();
-      utils.analytics.summary.invalidate();
-      utils.notifications.list.invalidate();
-      const messages: Record<string, string> = {
-        approved: "Comment approved!",
-        rejected: "Comment rejected",
-        posted: "Comment marked as posted!",
-      };
-      toast.success(messages[vars.status] ?? "Updated");
+      onRefetch();
     },
     onError: (e) => toast.error(e.message),
   });
 
-  const bulkApproveMutation = trpc.engagement.bulkApprove.useMutation({
-    onSuccess: (data) => {
-      utils.engagement.getQueue.invalidate();
-      toast.success(`${data.approved} comments approved!`);
-    },
-  });
+  const activeContent = isEditing ? editText : (item.editedContent ?? item.generatedComment);
+  const hasEdits = (item.editedContent ?? item.generatedComment) !== item.generatedComment;
+  const charCount = activeContent.length;
+  const isPending = item.status === "pending";
 
-  const pendingItems = queue?.filter((q) => q.status === "pending") ?? [];
+  function handleApprove() {
+    const payload: { id: number; status: "approved"; editedContent?: string } = {
+      id: item.id,
+      status: "approved",
+    };
+    // If currently editing, save the edit alongside approval
+    if (isEditing && editText !== item.generatedComment) {
+      payload.editedContent = editText;
+    } else if (item.editedContent) {
+      payload.editedContent = item.editedContent;
+    }
+    updateMutation.mutate(payload);
+    toast.success("Comment approved!");
+    setIsEditing(false);
+  }
+
+  function handleReject() {
+    updateMutation.mutate({ id: item.id, status: "rejected" });
+    toast.error("Comment rejected.");
+  }
+
+  function handleSaveEdit() {
+    if (editText.trim().length === 0) {
+      toast.error("Comment cannot be empty.");
+      return;
+    }
+    updateMutation.mutate({
+      id: item.id,
+      status: item.status as "approved" | "rejected" | "posted",
+      editedContent: editText,
+    });
+    setIsEditing(false);
+    toast.success("Edit saved.");
+  }
+
+  function handleCancelEdit() {
+    setEditText(item.editedContent ?? item.generatedComment);
+    setIsEditing(false);
+  }
+
+  function handleRestoreOriginal() {
+    setEditText(item.generatedComment);
+    updateMutation.mutate({
+      id: item.id,
+      status: item.status as "approved" | "rejected" | "posted",
+      editedContent: item.generatedComment,
+    });
+    toast.success("Restored to original AI draft.");
+  }
+
+  const isBusy = updateMutation.isPending;
 
   return (
-    <div className="space-y-6 max-w-5xl">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <Card className={`bg-card border-border transition-all hover:border-primary/20 ${isEditing ? "border-primary/40 shadow-lg shadow-primary/5" : ""}`}>
+      <CardContent className="p-5 space-y-4">
+        {/* Header row */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              {item.platform && (
+                <span className={`text-xs px-2 py-0.5 rounded-md font-medium capitalize ${PLATFORM_COLORS[item.platform] ?? "bg-muted text-muted-foreground"}`}>
+                  {item.platform}
+                </span>
+              )}
+              {item.commentTone && (
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${TONE_COLORS[item.commentTone] ?? "bg-muted text-muted-foreground"}`}>
+                  {item.commentTone}
+                </span>
+              )}
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${STATUS_COLORS[item.status] ?? "bg-muted text-muted-foreground"}`}>
+                {item.status}
+              </span>
+              {hasEdits && !isEditing && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium flex items-center gap-1">
+                  <Pencil className="h-2.5 w-2.5" /> Edited
+                </span>
+              )}
+            </div>
+            {item.threadTitle && (
+              <p className="text-sm text-muted-foreground truncate">
+                Re: <span className="text-foreground/80">{item.threadTitle}</span>
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            {item.threadUrl && (
+              <a href={item.threadUrl} target="_blank" rel="noopener noreferrer">
+                <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-foreground">
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </Button>
+              </a>
+            )}
+            {isPending && !isEditing && (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 text-muted-foreground hover:text-primary"
+                onClick={() => setIsEditing(true)}
+                disabled={isBusy}
+                title="Edit comment"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Confidence score */}
+        {item.confidenceScore != null && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Sparkles className="h-3 w-3" /> AI Confidence
+              </span>
+            </div>
+            <ConfidenceBar score={item.confidenceScore} />
+          </div>
+        )}
+
+        {/* Comment content — editable or read-only */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              {isEditing ? "Editing Comment" : hasEdits ? "Your Edited Version" : "AI Draft"}
+            </span>
+            {hasEdits && !isEditing && (
+              <button
+                onClick={handleRestoreOriginal}
+                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                disabled={isBusy}
+              >
+                <RotateCcw className="h-3 w-3" /> Restore original
+              </button>
+            )}
+          </div>
+
+          {isEditing ? (
+            <div className="space-y-2">
+              <Textarea
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                rows={5}
+                className="bg-input border-primary/40 text-foreground placeholder:text-muted-foreground resize-none focus:ring-1 focus:ring-primary/60 text-sm leading-relaxed"
+                placeholder="Edit the AI-generated comment..."
+                autoFocus
+              />
+              <div className="flex items-center justify-between">
+                <span className={`text-xs tabular-nums ${charCount > 280 ? "text-red-400" : "text-muted-foreground"}`}>
+                  {charCount} characters{charCount > 280 ? " (Twitter limit exceeded)" : ""}
+                </span>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="ghost" onClick={handleCancelEdit} className="h-7 text-xs" disabled={isBusy}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={handleSaveEdit} className="h-7 text-xs gap-1" disabled={isBusy || editText.trim().length === 0}>
+                    {isBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                    Save
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div
+              className={`rounded-lg p-3.5 text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap cursor-text border transition-colors ${
+                isPending
+                  ? "bg-muted/40 border-border hover:border-primary/30 hover:bg-muted/60"
+                  : "bg-muted/20 border-transparent"
+              }`}
+              onClick={() => isPending && setIsEditing(true)}
+              title={isPending ? "Click to edit" : undefined}
+            >
+              {activeContent}
+              {isPending && (
+                <span className="ml-2 inline-flex items-center gap-0.5 text-xs text-muted-foreground/60">
+                  <Pencil className="h-2.5 w-2.5" /> click to edit
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Show original AI draft when edited */}
+          {hasEdits && !isEditing && (
+            <div className="rounded-lg p-3 bg-muted/20 border border-dashed border-border/60">
+              <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+                <Sparkles className="h-3 w-3" /> Original AI draft
+              </p>
+              <p className="text-xs text-muted-foreground/70 leading-relaxed">{item.generatedComment}</p>
+            </div>
+          )}
+        </div>
+
+        {/* AI Reasoning (collapsible) */}
+        {item.aiReasoning && (
+          <div>
+            <button
+              onClick={() => setShowReasoning((v) => !v)}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {showReasoning ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              AI reasoning
+            </button>
+            {showReasoning && (
+              <p className="mt-2 text-xs text-muted-foreground/80 leading-relaxed bg-muted/30 rounded-lg p-3 border border-border/40">
+                {item.aiReasoning}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Action buttons */}
+        {isPending && !isEditing && (
+          <div className="flex gap-2 pt-1">
+            <Button
+              className="flex-1 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+              size="sm"
+              onClick={handleApprove}
+              disabled={isBusy}
+            >
+              {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+              Approve
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 gap-2 border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-400"
+              onClick={handleReject}
+              disabled={isBusy}
+            >
+              <X className="h-3.5 w-3.5" />
+              Reject
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function EngagementQueue() {
+  const [activeTab, setActiveTab] = useState<FilterTab>("pending");
+  const utils = trpc.useUtils();
+
+  const { data: allItems, isLoading, refetch } = trpc.engagement.getQueue.useQuery(
+    { status: activeTab === "all" ? undefined : activeTab },
+    { refetchInterval: 15_000 }
+  );
+
+  const { data: pendingItems } = trpc.engagement.getQueue.useQuery({ status: "pending" });
+  const pendingCount = pendingItems?.length ?? 0;
+
+  const bulkApproveMutation = trpc.engagement.bulkApprove.useMutation({
+    onSuccess: (result) => {
+      utils.engagement.getQueue.invalidate();
+      toast.success(`${result.approved} comment${result.approved !== 1 ? "s" : ""} approved!`);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const tabs: { key: FilterTab; label: string }[] = [
+    { key: "pending", label: "Pending" },
+    { key: "approved", label: "Approved" },
+    { key: "rejected", label: "Rejected" },
+    { key: "posted", label: "Posted" },
+    { key: "all", label: "All" },
+  ];
+
+  const items = allItems ?? [];
+
+  return (
+    <div className="space-y-6 max-w-4xl">
+      {/* Page header */}
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <MessageSquareMore className="h-6 w-6 text-primary" />
             Engagement Queue
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Review and approve AI-generated comments before they go live
+            Review, edit, and approve AI-generated comments before they go live
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-40 bg-input border-border text-foreground">
-              <Filter className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-card border-border">
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="approved">Approved</SelectItem>
-              <SelectItem value="posted">Posted</SelectItem>
-              <SelectItem value="rejected">Rejected</SelectItem>
-            </SelectContent>
-          </Select>
-          {pendingItems.length > 1 && (
-            <Button
-              variant="outline"
-              className="gap-2 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
-              disabled={bulkApproveMutation.isPending}
-              onClick={() => bulkApproveMutation.mutate({ ids: pendingItems.map((q) => q.id) })}
-            >
-              <CheckCircle className="h-4 w-4" />
-              Approve All ({pendingItems.length})
-            </Button>
-          )}
-        </div>
+        {pendingCount > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-400 shrink-0"
+            onClick={() => {
+              const ids = (pendingItems ?? []).map((i) => i.id);
+              bulkApproveMutation.mutate({ ids });
+            }}
+            disabled={bulkApproveMutation.isPending}
+          >
+            {bulkApproveMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <CheckCheck className="h-3.5 w-3.5" />
+            )}
+            Approve All ({pendingCount})
+          </Button>
+        )}
       </div>
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-4 gap-3">
-        {[
-          { label: "Pending", status: "pending", color: "text-amber-400" },
-          { label: "Approved", status: "approved", color: "text-blue-400" },
-          { label: "Posted", status: "posted", color: "text-emerald-400" },
-          { label: "Rejected", status: "rejected", color: "text-red-400" },
-        ].map((s) => {
-          const { data: statusData } = trpc.engagement.getQueue.useQuery({ status: s.status });
-          return (
-            <Card key={s.status} className={`bg-card border-border cursor-pointer hover:border-primary/30 transition-all ${statusFilter === s.status ? "border-primary/50" : ""}`} onClick={() => setStatusFilter(s.status)}>
-              <CardContent className="p-3 text-center">
-                <p className={`text-xl font-bold ${s.color}`}>{statusData?.length ?? 0}</p>
-                <p className="text-xs text-muted-foreground">{s.label}</p>
-              </CardContent>
+      {/* Filter tabs */}
+      <div className="flex gap-1 p-1 bg-muted/40 rounded-lg border border-border w-fit">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+              activeTab === tab.key
+                ? "bg-card text-foreground shadow-sm border border-border"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+            {tab.key === "pending" && pendingCount > 0 && (
+              <span className="ml-1.5 text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded-full">
+                {pendingCount}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Queue items */}
+      {isLoading ? (
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="bg-card border-border animate-pulse">
+              <CardContent className="p-5 h-48" />
             </Card>
-          );
-        })}
-      </div>
-
-      {/* Queue Items */}
-      <Card className="bg-card border-border">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold text-foreground capitalize">
-            {statusFilter} Comments
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="space-y-4">
-              {[1, 2, 3].map((i) => <div key={i} className="h-32 rounded-xl bg-muted/40 animate-pulse" />)}
-            </div>
-          ) : !queue || queue.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Bot className="h-12 w-12 mx-auto mb-3 opacity-20" />
-              <p className="text-sm font-medium">No {statusFilter} comments</p>
-              <p className="text-xs mt-1 max-w-xs mx-auto">
-                {statusFilter === "pending"
-                  ? "Discover threads and generate AI comments to populate the queue."
-                  : `No ${statusFilter} comments yet.`}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {queue.map((item) => (
-                <div key={item.id} className="p-4 rounded-xl bg-muted/30 border border-border hover:border-primary/20 transition-all">
-                  {/* Comment */}
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className="p-2 rounded-lg bg-primary/10 shrink-0">
-                      <Bot className="h-4 w-4 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${STATUS_COLORS[item.status]}`}>
-                          {item.status}
-                        </span>
-                        {item.commentTone && (
-                          <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${TONE_COLORS[item.commentTone] ?? "bg-muted text-muted-foreground"}`}>
-                            {item.commentTone}
-                          </span>
-                        )}
-                        <span className="text-xs text-muted-foreground">
-                          Confidence: <span className="text-foreground font-medium">{item.confidenceScore?.toFixed(1)}/10</span>
-                        </span>
-                      </div>
-                      <p className="text-sm text-foreground leading-relaxed">{item.generatedComment}</p>
-                    </div>
-                  </div>
-
-                  {/* AI Reasoning */}
-                  {item.aiReasoning && (
-                    <div className="ml-11 mb-3 p-2.5 rounded-lg bg-primary/5 border border-primary/10">
-                      <p className="text-xs text-muted-foreground">
-                        <span className="text-primary font-medium">AI Reasoning: </span>
-                        {item.aiReasoning}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Confidence Bar */}
-                  <div className="ml-11 mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-primary"
-                          style={{ width: `${((item.confidenceScore ?? 0) / 10) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  {item.status === "pending" && (
-                    <div className="ml-11 flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
-                        disabled={updateMutation.isPending}
-                        onClick={() => updateMutation.mutate({ id: item.id, status: "approved" })}
-                      >
-                        <CheckCircle className="h-3.5 w-3.5" />Approve
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1.5 border-red-500/40 text-red-400 hover:bg-red-500/10"
-                        disabled={updateMutation.isPending}
-                        onClick={() => updateMutation.mutate({ id: item.id, status: "rejected" })}
-                      >
-                        <XCircle className="h-3.5 w-3.5" />Reject
-                      </Button>
-                    </div>
-                  )}
-                  {item.status === "approved" && (
-                    <div className="ml-11 flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        className="gap-1.5"
-                        disabled={updateMutation.isPending}
-                        onClick={() => updateMutation.mutate({ id: item.id, status: "posted" })}
-                      >
-                        <Send className="h-3.5 w-3.5" />Mark as Posted
-                      </Button>
-                    </div>
-                  )}
-                  {item.status === "posted" && item.postedAt && (
-                    <div className="ml-11">
-                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Send className="h-3 w-3 text-emerald-400" />
-                        Posted {new Date(item.postedAt).toLocaleString()}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="ml-11 mt-2">
-                    <p className="text-xs text-muted-foreground">
-                      Generated {new Date(item.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <Card className="bg-card border-border">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <MessageSquareMore className="h-12 w-12 text-muted-foreground/30 mb-4" />
+            <h3 className="text-lg font-semibold text-foreground mb-1">
+              {activeTab === "pending" ? "Queue is empty" : `No ${activeTab} comments`}
+            </h3>
+            <p className="text-muted-foreground text-sm max-w-sm">
+              {activeTab === "pending"
+                ? "Run discovery on a campaign to generate AI-powered comments for review."
+                : `Comments with "${activeTab}" status will appear here.`}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {items.map((item) => (
+            <QueueCard
+              key={item.id}
+              item={item as QueueItem}
+              onRefetch={() => refetch()}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

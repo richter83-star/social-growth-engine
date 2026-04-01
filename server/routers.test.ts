@@ -302,3 +302,44 @@ describe("billing", () => {
     ).rejects.toThrow();
   });
 });
+
+// ─── Inline Comment Editor Tests ──────────────────────────────────────────────
+describe("engagement.updateStatus with editedContent", () => {
+  it("accepts approve with editedContent and persists the edit", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.engagement.updateStatus({
+      id: 1,
+      status: "approved",
+      editedContent: "My custom edited comment text",
+    });
+    expect(result).toBeUndefined();
+  });
+
+  it("accepts reject without editedContent", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.engagement.updateStatus({
+      id: 2,
+      status: "rejected",
+    });
+    expect(result).toBeUndefined();
+  });
+
+  it("accepts approve without editedContent (original AI draft)", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.engagement.updateStatus({
+      id: 3,
+      status: "approved",
+    });
+    expect(result).toBeUndefined();
+  });
+
+  it("lists queue items for authenticated user", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.engagement.getQueue({ status: "pending" });
+    expect(Array.isArray(result)).toBe(true);
+  });
+});

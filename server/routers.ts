@@ -276,9 +276,15 @@ const engagementRouter = router({
     .input(z.object({
       id: z.number(),
       status: z.enum(["approved", "rejected", "posted"]),
+      editedContent: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const extra: Record<string, unknown> = {};
+      // Persist edited content if provided
+      if (input.editedContent !== undefined) {
+        extra.editedContent = input.editedContent;
+        extra.isEdited = true;
+      }
       if (input.status === "posted") {
         extra.postedAt = new Date();
         extra.engagementResult = { likes: 0, replies: 0, impressions: 0 };

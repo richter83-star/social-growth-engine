@@ -62,3 +62,14 @@
 - [x] Billing portal link (Stripe customer portal)
 - [x] Show current plan badge in sidebar
 - [x] Upgrade prompt when user hits plan limits
+
+## Inline Comment Editor (Engagement Queue)
+- [ ] Backend: add `editedContent` field to updateEngagementStatus mutation so edits are persisted
+- [ ] EngagementQueue: inline textarea editor per queue item (click Edit to expand)
+- [ ] EngagementQueue: character count and Save/Cancel controls on the inline editor
+- [ ] EngagementQueue: Approve button posts the current content (original or edited)
+- [ ] EngagementQueue: Reject button with single click
+- [ ] EngagementQueue: visual indicator showing when content has been edited vs original AI draft
+- [ ] EngagementQueue: filter tabs — All / Pending / Approved / Rejected
+- [ ] EngagementQueue: bulk approve all pending items button
+- [ ] Tests: inline editor mutation test
