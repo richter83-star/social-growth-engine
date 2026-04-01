@@ -603,3 +603,41 @@ export async function adminUpdateUserPlan(userId: number, plan: "free" | "pro" |
   const { eq } = await import("drizzle-orm");
   await db.update(subscriptions).set({ plan, status: "active", updatedAt: new Date() }).where(eq(subscriptions.userId, userId));
 }
+
+// --- Churn Reasons -----------------------------------------------------------
+import { churnReasons, InsertChurnReason } from "../drizzle/schema";
+
+export async function saveChurnReason(data: InsertChurnReason) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.insert(churnReasons).values(data);
+}
+
+export async function getChurnReasonBreakdown() {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select({ reason: churnReasons.reason, plan: churnReasons.plan })
+    .from(churnReasons);
+  // Aggregate counts by reason
+  const counts: Record<string, number> = {};
+  for (const row of rows) {
+    counts[row.reason] = (counts[row.reason] ?? 0) + 1;
+  }
+  return Object.entries(counts).map(([reason, count]) => ({ reason, count }));
+}
+
+export async function getChurnReasonsByPlan() {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select({ reason: churnReasons.reason, plan: churnReasons.plan })
+    .from(churnReasons);
+  // Aggregate counts by plan + reason
+  const map: Record<string, Record<string, number>> = {};
+  for (const row of rows) {
+    if (!map[row.plan]) map[row.plan] = {};
+    map[row.plan][row.reason] = (map[row.plan][row.reason] ?? 0) + 1;
+  }
+  return map;
+}

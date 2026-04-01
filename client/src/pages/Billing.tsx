@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import {
 import { toast } from "sonner";
 import {
   Check, Zap, Building2, Sparkles, ExternalLink, CreditCard,
-  AlertTriangle, RefreshCw, XCircle, CalendarX,
+  AlertTriangle, RefreshCw, XCircle, CalendarX, Gift, Tag, Copy, CheckCircle2,
 } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -102,6 +102,24 @@ export default function Billing() {
   const utils = trpc.useUtils();
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showReactivateDialog, setShowReactivateDialog] = useState(false);
+  const [cancelStep, setCancelStep] = useState<"reason" | "winback" | "confirm">("reason");
+  const [selectedReason, setSelectedReason] = useState<"too_expensive" | "not_using" | "missing_features" | "other" | null>(null);
+  const [copiedCode, setCopiedCode] = useState(false);
+
+  const WINBACK_CODE = "WINBACK20";
+
+  const openCancelDialog = useCallback(() => {
+    setCancelStep("reason");
+    setSelectedReason(null);
+    setCopiedCode(false);
+    setShowCancelDialog(true);
+  }, []);
+
+  const handleCopyCode = useCallback(() => {
+    navigator.clipboard.writeText(WINBACK_CODE);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
+  }, []);
 
   const { data: subData } = trpc.billing.getSubscription.useQuery();
   const sub = subData as {
@@ -142,6 +160,10 @@ export default function Billing() {
       setShowCancelDialog(false);
     },
   });
+
+  const handleConfirmCancel = () => {
+    cancelSubscription.mutate(selectedReason ? { reason: selectedReason } : undefined);
+  };
 
   const reactivateSubscription = trpc.billing.reactivateSubscription.useMutation({
     onSuccess: () => {
@@ -242,7 +264,7 @@ export default function Billing() {
                       variant="outline"
                       size="sm"
                       className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
-                      onClick={() => setShowCancelDialog(true)}
+                      onClick={openCancelDialog}
                     >
                       <XCircle className="h-3.5 w-3.5" />
                       Cancel Plan
@@ -380,63 +402,178 @@ export default function Billing() {
         </Card>
       </div>
 
-      {/* ── Cancel Confirmation Dialog ─────────────────────────────────────── */}
-      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+      {/* ── Cancel Dialog — 3-step flow ────────────────────────────────────── */}
+      <Dialog open={showCancelDialog} onOpenChange={(open) => { if (!open) setShowCancelDialog(false); }}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <div className="flex items-center gap-3 mb-1">
-              <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
-                <AlertTriangle className="h-5 w-5 text-destructive" />
-              </div>
-              <DialogTitle className="text-foreground">Cancel {planLabel} Plan?</DialogTitle>
-            </div>
-            <DialogDescription className="text-muted-foreground">
-              Your subscription will remain active until{" "}
-              <span className="font-semibold text-foreground">
-                {periodEnd
-                  ? periodEnd.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
-                  : "the end of your billing period"}
-              </span>
-              . After that, you'll revert to the Free plan.
-            </DialogDescription>
-          </DialogHeader>
 
-          {lossWarnings.length > 0 && (
-            <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-4 space-y-2">
-              <p className="text-xs font-semibold text-destructive uppercase tracking-wide">What you'll lose</p>
-              <ul className="space-y-1.5">
-                {lossWarnings.map((w) => (
-                  <li key={w} className="flex items-start gap-2 text-sm text-muted-foreground">
-                    <XCircle className="h-3.5 w-3.5 text-destructive mt-0.5 shrink-0" />
-                    {w}
-                  </li>
+          {/* Step indicator */}
+          <div className="flex items-center gap-1.5 mb-1">
+            {(["reason", "winback", "confirm"] as const).map((step, i) => (
+              <div key={step} className="flex items-center gap-1.5">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                  cancelStep === step ? "bg-primary text-primary-foreground" :
+                  (["reason", "winback", "confirm"].indexOf(cancelStep) > i) ? "bg-primary/30 text-primary" :
+                  "bg-muted text-muted-foreground"
+                }`}>{i + 1}</div>
+                {i < 2 && <div className={`h-px w-6 transition-colors ${["reason", "winback", "confirm"].indexOf(cancelStep) > i ? "bg-primary/40" : "bg-border"}`} />}
+              </div>
+            ))}
+            <span className="ml-2 text-xs text-muted-foreground">
+              {cancelStep === "reason" ? "Why are you leaving?" : cancelStep === "winback" ? "Special offer" : "Confirm cancellation"}
+            </span>
+          </div>
+
+          {/* ── Step 1: Reason Survey ── */}
+          {cancelStep === "reason" && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-foreground">Why are you canceling?</DialogTitle>
+                <DialogDescription>Your feedback helps us improve Growth Engine for everyone.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-2 my-2">
+                {([
+                  { value: "too_expensive" as const, label: "Too expensive", emoji: "💸" },
+                  { value: "not_using" as const, label: "Not using it enough", emoji: "😴" },
+                  { value: "missing_features" as const, label: "Missing features I need", emoji: "🔧" },
+                  { value: "other" as const, label: "Other reason", emoji: "💬" },
+                ]).map(({ value, label, emoji }) => (
+                  <button
+                    key={value}
+                    onClick={() => setSelectedReason(value)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border text-left transition-all ${
+                      selectedReason === value
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:bg-muted/30"
+                    }`}
+                  >
+                    <span className="text-lg">{emoji}</span>
+                    <span className="text-sm font-medium">{label}</span>
+                    {selectedReason === value && <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />}
+                  </button>
                 ))}
-              </ul>
-            </div>
+              </div>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button variant="outline" onClick={() => setShowCancelDialog(false)} className="flex-1 sm:flex-none">
+                  Keep My Plan
+                </Button>
+                <Button
+                  onClick={() => setCancelStep(selectedReason === "too_expensive" ? "winback" : "confirm")}
+                  disabled={!selectedReason}
+                  className="flex-1 sm:flex-none"
+                >
+                  Continue
+                </Button>
+              </DialogFooter>
+            </>
           )}
 
-          <p className="text-xs text-muted-foreground">
-            You can reactivate your plan at any time before the cancellation date to keep all your features.
-          </p>
+          {/* ── Step 2: Win-Back Offer (only for "too_expensive") ── */}
+          {cancelStep === "winback" && (
+            <>
+              <DialogHeader>
+                <div className="flex items-center gap-3 mb-1">
+                  <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
+                    <Gift className="h-5 w-5 text-amber-400" />
+                  </div>
+                  <DialogTitle className="text-foreground">Before you go — a special offer</DialogTitle>
+                </div>
+                <DialogDescription>
+                  We'd love to keep you. Here's <span className="font-semibold text-foreground">20% off your next 3 months</span> — just apply this code at checkout.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Tag className="h-4 w-4 text-amber-400 shrink-0" />
+                  <p className="text-xs text-muted-foreground">Your exclusive discount code</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 bg-background border border-amber-500/30 rounded-lg px-4 py-2.5">
+                    <span className="font-mono text-lg font-bold tracking-widest text-amber-400">{WINBACK_CODE}</span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 border-amber-500/30 hover:bg-amber-500/10"
+                    onClick={handleCopyCode}
+                  >
+                    {copiedCode ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                    {copiedCode ? "Copied!" : "Copy"}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">Valid for 7 days. Apply during checkout on the Billing page.</p>
+              </div>
+              <DialogFooter className="gap-2 sm:gap-0 flex-col sm:flex-row">
+                <Button variant="outline" onClick={() => setShowCancelDialog(false)} className="flex-1 sm:flex-none">
+                  Keep My Plan
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => setCancelStep("confirm")}
+                  className="flex-1 sm:flex-none text-muted-foreground hover:text-foreground text-xs"
+                >
+                  No thanks, still cancel
+                </Button>
+              </DialogFooter>
+            </>
+          )}
 
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              variant="outline"
-              onClick={() => setShowCancelDialog(false)}
-              disabled={cancelSubscription.isPending}
-              className="flex-1 sm:flex-none"
-            >
-              Keep My Plan
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => cancelSubscription.mutate()}
-              disabled={cancelSubscription.isPending}
-              className="flex-1 sm:flex-none"
-            >
-              {cancelSubscription.isPending ? "Canceling..." : "Yes, Cancel Plan"}
-            </Button>
-          </DialogFooter>
+          {/* ── Step 3: Final Confirm ── */}
+          {cancelStep === "confirm" && (
+            <>
+              <DialogHeader>
+                <div className="flex items-center gap-3 mb-1">
+                  <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="h-5 w-5 text-destructive" />
+                  </div>
+                  <DialogTitle className="text-foreground">Confirm Cancellation</DialogTitle>
+                </div>
+                <DialogDescription className="text-muted-foreground">
+                  Your <span className="font-semibold text-foreground capitalize">{currentPlan}</span> plan will remain active until{" "}
+                  <span className="font-semibold text-foreground">
+                    {periodEnd
+                      ? periodEnd.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
+                      : "the end of your billing period"}
+                  </span>
+                  . After that, you'll revert to the Free plan.
+                </DialogDescription>
+              </DialogHeader>
+              {lossWarnings.length > 0 && (
+                <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-4 space-y-2">
+                  <p className="text-xs font-semibold text-destructive uppercase tracking-wide">What you'll lose</p>
+                  <ul className="space-y-1.5">
+                    {lossWarnings.map((w) => (
+                      <li key={w} className="flex items-start gap-2 text-sm text-muted-foreground">
+                        <XCircle className="h-3.5 w-3.5 text-destructive mt-0.5 shrink-0" />
+                        {w}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                You can reactivate at any time before the cancellation date to keep all your features.
+              </p>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowCancelDialog(false)}
+                  disabled={cancelSubscription.isPending}
+                  className="flex-1 sm:flex-none"
+                >
+                  Keep My Plan
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleConfirmCancel}
+                  disabled={cancelSubscription.isPending}
+                  className="flex-1 sm:flex-none"
+                >
+                  {cancelSubscription.isPending ? "Canceling..." : "Yes, Cancel Plan"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+
         </DialogContent>
       </Dialog>
 

@@ -6,7 +6,7 @@ import {
   Users, DollarSign, TrendingUp, Activity, MessageSquare,
   Server, Search, ChevronDown, ChevronUp, RefreshCw,
   Crown, Shield, AlertTriangle, CheckCircle, Clock,
-  BarChart2, PieChart as PieChartIcon, Zap, Eye
+  BarChart2, PieChart as PieChartIcon, Zap, Eye, XCircle
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -276,8 +276,17 @@ function CustomersTab({ onSelectUser }: { onSelectUser: (id: number) => void }) 
 }
 
 // ─── Revenue Tab ─────────────────────────────────────────────────────────────
+const CHURN_REASON_LABELS: Record<string, string> = {
+  too_expensive: "Too Expensive",
+  not_using: "Not Using It",
+  missing_features: "Missing Features",
+  other: "Other",
+};
+const CHURN_COLORS = ["#f59e0b", "#8b5cf6", "#06b6d4", "#6b7280"];
+
 function RevenueTab() {
   const { data, isLoading } = trpc.admin.getRevenueMetrics.useQuery();
+  const { data: churnData } = trpc.admin.getChurnReasons.useQuery();
 
   if (isLoading) return <div className="flex items-center justify-center h-48 text-muted-foreground">Loading revenue data...</div>;
   if (!data) return null;
@@ -375,6 +384,54 @@ function RevenueTab() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Churn Reasons */}
+      <Card className="bg-card/50 border-border/50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <XCircle className="w-4 h-4 text-destructive" /> Cancellation Reasons
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!churnData || churnData.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-24 gap-2 text-muted-foreground text-sm">
+              <span>No cancellations recorded yet</span>
+              <span className="text-xs">Churn reasons will appear here once users start canceling</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-6">
+              <ResponsiveContainer width="40%" height={160}>
+                <PieChart>
+                  <Pie data={churnData.map((d, i) => ({ name: CHURN_REASON_LABELS[d.reason] ?? d.reason, value: d.count, color: CHURN_COLORS[i % CHURN_COLORS.length] }))} cx="50%" cy="50%" innerRadius={35} outerRadius={60} dataKey="value" paddingAngle={3}>
+                    {churnData.map((_, i) => <Cell key={i} fill={CHURN_COLORS[i % CHURN_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ background: "#1e1e2e", border: "1px solid #333" }} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex-1 space-y-2">
+                {churnData.map((d, i) => {
+                  const total = churnData.reduce((s, r) => s + r.count, 0);
+                  const pct = total > 0 ? Math.round((d.count / total) * 100) : 0;
+                  return (
+                    <div key={d.reason} className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: CHURN_COLORS[i % CHURN_COLORS.length] }} />
+                          <span className="text-xs text-muted-foreground">{CHURN_REASON_LABELS[d.reason] ?? d.reason}</span>
+                        </div>
+                        <span className="text-xs font-semibold text-foreground">{d.count} ({pct}%)</span>
+                      </div>
+                      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: CHURN_COLORS[i % CHURN_COLORS.length] }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

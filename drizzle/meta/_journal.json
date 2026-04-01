@@ -50,6 +50,13 @@
       "when": 1775073667763,
       "tag": "0006_silky_texas_twister",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1775076856544,
+      "tag": "0007_lethal_luckman",
+      "breakpoints": true
     }
   ]
 }

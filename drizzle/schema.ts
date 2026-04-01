@@ -241,3 +241,14 @@ export const supportMessages = mysqlTable("support_messages", {
 
 export type SupportMessage = typeof supportMessages.$inferSelect;
 export type InsertSupportMessage = typeof supportMessages.$inferInsert;
+
+// Cancellation churn reasons
+export const churnReasons = mysqlTable("churn_reasons", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  plan: mysqlEnum("plan", ["free", "pro", "agency"]).notNull(),
+  reason: mysqlEnum("reason", ["too_expensive", "not_using", "missing_features", "other"]).notNull(),
+  canceledAt: timestamp("canceledAt").defaultNow().notNull(),
+});
+export type ChurnReason = typeof churnReasons.$inferSelect;
+export type InsertChurnReason = typeof churnReasons.$inferInsert;

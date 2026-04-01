@@ -195,3 +195,13 @@
 - [x] Frontend: Post-cancel state — shows "Cancels on [date]" badge with Reactivate option
 - [x] Frontend: Optimistic UI update so the page reflects cancellation immediately without full reload
 - [x] Tests: cancelSubscription calls Stripe and updates DB; reactivateSubscription reverses it; non-subscriber gets FORBIDDEN
+
+## Win-Back Offer & Churn Survey
+- [x] DB: add churn_reasons table (id, userId, plan, reason enum, canceledAt)
+- [x] Backend: billing.cancelSubscription updated to accept optional reason param and save to churn_reasons
+- [x] Backend: admin.getChurnReasons query — returns reason breakdown counts for Admin Dashboard
+- [x] Frontend: cancellation dialog rebuilt as 3-step flow: Step 1 reason survey, Step 2 win-back offer with promo code, Step 3 final confirm
+- [x] Frontend: win-back step shows "20% off next 3 months" offer with copyable promo code WINBACK20
+- [x] Frontend: reason survey — 4 radio options: Too expensive / Not using it / Missing features / Other
+- [x] Admin Dashboard Revenue tab: churn reasons donut/bar chart
+- [x] Tests: cancellation with reason saves to DB; admin.getChurnReasons returns correct breakdown

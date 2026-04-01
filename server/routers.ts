@@ -29,6 +29,7 @@ import {
   adminGetOverview, adminGetUsers, adminGetUserDetail,
   adminGetRevenueMetrics, adminGetSupportActivity,
   adminGetSystemHealth, adminUpdateUserPlan,
+  saveChurnReason, getChurnReasonBreakdown,
 } from "./db";
 import { invokeLLM } from "./_core/llm";
 import Stripe from "stripe";
@@ -604,22 +605,34 @@ const billingRouter = router({
     return { plan, limits: PLAN_LIMITS[plan] };
   }),
 
-  cancelSubscription: protectedProcedure.mutation(async ({ ctx }) => {
-    const sub = await getSubscriptionByUserId(ctx.user.id);
-    if (!sub?.stripeSubscriptionId) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "No active subscription found" });
-    }
-    if (sub.cancelAtPeriodEnd) {
-      throw new TRPCError({ code: "BAD_REQUEST", message: "Subscription is already set to cancel" });
-    }
-    // Tell Stripe to cancel at end of current billing period (not immediately)
-    await stripe.subscriptions.update(sub.stripeSubscriptionId, {
-      cancel_at_period_end: true,
-    });
-    // Reflect in DB
-    await updateSubscription(ctx.user.id, { cancelAtPeriodEnd: true });
-    return { success: true, cancelAtPeriodEnd: true, currentPeriodEnd: sub.currentPeriodEnd };
-  }),
+  cancelSubscription: protectedProcedure
+    .input(z.object({
+      reason: z.enum(["too_expensive", "not_using", "missing_features", "other"]).optional(),
+    }).optional())
+    .mutation(async ({ ctx, input }) => {
+      const sub = await getSubscriptionByUserId(ctx.user.id);
+      if (!sub?.stripeSubscriptionId) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "No active subscription found" });
+      }
+      if (sub.cancelAtPeriodEnd) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Subscription is already set to cancel" });
+      }
+      // Tell Stripe to cancel at end of current billing period (not immediately)
+      await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+        cancel_at_period_end: true,
+      });
+      // Reflect in DB
+      await updateSubscription(ctx.user.id, { cancelAtPeriodEnd: true });
+      // Save churn reason if provided
+      if (input?.reason) {
+        await saveChurnReason({
+          userId: ctx.user.id,
+          plan: (sub.plan ?? "free") as "free" | "pro" | "agency",
+          reason: input.reason,
+        }).catch(() => {}); // non-fatal
+      }
+      return { success: true, cancelAtPeriodEnd: true, currentPeriodEnd: sub.currentPeriodEnd };
+    }),
 
   reactivateSubscription: protectedProcedure.mutation(async ({ ctx }) => {
     const sub = await getSubscriptionByUserId(ctx.user.id);
@@ -747,6 +760,8 @@ const adminRouter = router({
       await adminUpdateUserPlan(input.userId, input.plan);
       return { success: true };
     }),
+
+  getChurnReasons: adminProcedure.query(async () => getChurnReasonBreakdown()),
 });
 
 // --- App Router -------------------------------------------------------------
