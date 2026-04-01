@@ -228,3 +228,16 @@ export const teamMembers = mysqlTable("team_members", {
 
 export type TeamMember = typeof teamMembers.$inferSelect;
 export type InsertTeamMember = typeof teamMembers.$inferInsert;
+
+// Support chat messages
+export const supportMessages = mysqlTable("support_messages", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId"),           // null for unauthenticated visitors
+  sessionId: varchar("sessionId", { length: 128 }).notNull(), // client-generated UUID
+  role: mysqlEnum("role", ["user", "assistant"]).notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type SupportMessage = typeof supportMessages.$inferSelect;
+export type InsertSupportMessage = typeof supportMessages.$inferInsert;

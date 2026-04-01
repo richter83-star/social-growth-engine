@@ -15,7 +15,8 @@ import Analytics from "./pages/Analytics";
 import Schedules from "./pages/Schedules";
 import Billing from "./pages/Billing";
 import Team from "./pages/Team";
-import Help from "./pages/Help";
+import Help from "@/pages/Help";
+import { SupportChat } from "./components/SupportChat";
 
 // All authenticated dashboard routes wrapped in DashboardLayout
 function DashboardRouter() {
@@ -56,6 +57,7 @@ function App() {
         <TooltipProvider>
           <Toaster theme="dark" position="top-right" />
           <Router />
+          <SupportChat />
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

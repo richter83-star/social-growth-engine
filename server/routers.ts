@@ -23,7 +23,9 @@ import { registerSchedule, stopSchedule, triggerScheduleNow } from "./scheduler"
 import {
   getSchedulesByUser, createSchedule, updateSchedule as updateScheduleDb, deleteSchedule,
   getSubscriptionByUserId, upsertSubscription, updateSubscription,
+  getSupportHistory, saveSupportMessage,
 } from "./db";
+import { invokeLLM } from "./_core/llm";
 import Stripe from "stripe";
 import { PLAN_LIMITS, STRIPE_PRICES } from "./products";
 
@@ -598,7 +600,90 @@ const billingRouter = router({
   }),
 });
 
-// ─── App Router ───────────────────────────────────────────────────────────────
+// ─── Support Chat Router ───────────────────────────────────────────────────────────
+const SUPPORT_SYSTEM_PROMPT = `You are a friendly, knowledgeable support agent for Growth Engine — an AI-powered social media growth platform. Your job is to help users understand the product, troubleshoot issues, and make the most of their subscription.
+
+## Product Overview
+Growth Engine automates social media growth by:
+1. **Discovery** — AI scans Twitter/X, Reddit, LinkedIn, Instagram, and TikTok for high-intent conversations relevant to your keywords.
+2. **Engagement Queue** — AI drafts context-aware comments for each discovered thread. Users review, edit, approve, or reject drafts before they go live.
+3. **Campaigns** — Group keywords, platforms, and a persona (tone/style) into a campaign. Choose from playbooks: "3-Day Warmup" (gradual) or "Direct Negotiator" (assertive).
+4. **Schedules** — Automate discovery runs on a cron schedule (e.g., every 6 hours).
+5. **Analytics** — Track follower growth, engagement rate, impressions, and ROI over time.
+6. **Team** — Invite team members with granular permissions (edit, approve, reject, discover, manage campaigns).
+
+## Pricing Plans
+- **Free**: 1 campaign, 50 threads/month, 1 social account. No credit card required.
+- **Pro** ($49/month): 5 campaigns, unlimited threads, 5 social accounts, priority support.
+- **Agency** ($149/month): Unlimited campaigns, unlimited threads, unlimited accounts, team collaboration, white-label ready.
+
+## Common Questions
+- **How do I connect a social account?** Go to Accounts → Add Account. Enter your handle and credentials.
+- **How does Discovery work?** Start a campaign, click "Run Discovery". The AI scans platforms for threads matching your keywords and scores them by intent (0–1).
+- **Can I edit AI comments before posting?** Yes — in the Engagement Queue, click Edit on any pending item to modify the draft before approving.
+- **What is a persona?** A persona describes your brand voice (e.g., "Friendly SaaS founder who gives actionable advice"). The AI uses it to match your tone.
+- **How do I cancel my subscription?** Go to Billing → Manage Subscription. You can cancel anytime; access continues until the period ends.
+- **Is my data secure?** Yes — credentials are encrypted at rest, and we never post without your explicit approval.
+- **What platforms are supported?** Twitter/X, Reddit, LinkedIn, Instagram, TikTok.
+- **How do I upgrade?** Go to Billing and click Upgrade, or click the "Upgrade for more" button in the sidebar.
+
+## Tone Guidelines
+- Be concise, warm, and helpful. Use plain language.
+- If you don’t know the answer, say so honestly and suggest contacting support at support@growthengine.io.
+- Never make up features or pricing that aren’t listed above.
+- Keep responses under 150 words unless the user asks for a detailed explanation.`;
+
+const supportRouter = router({
+  getHistory: publicProcedure
+    .input(z.object({ sessionId: z.string().min(1).max(128) }))
+    .query(async ({ input }) => {
+      return getSupportHistory(input.sessionId);
+    }),
+
+  chat: publicProcedure
+    .input(z.object({
+      sessionId: z.string().min(1).max(128),
+      message: z.string().min(1).max(2000),
+      history: z.array(z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string(),
+      })).max(20).default([]),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.user?.id ?? null;
+
+      // Persist user message
+      await saveSupportMessage({
+        sessionId: input.sessionId,
+        userId: userId ?? undefined,
+        role: "user",
+        content: input.message,
+      });
+
+      // Build message history for LLM
+      const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+        { role: "system", content: SUPPORT_SYSTEM_PROMPT },
+        ...input.history.map(h => ({ role: h.role as "user" | "assistant", content: h.content })),
+        { role: "user", content: input.message },
+      ];
+
+      const response = await invokeLLM({ messages });
+      const rawContent = response.choices?.[0]?.message?.content;
+      const reply = (typeof rawContent === "string" ? rawContent : null) ?? "I'm sorry, I couldn't process your request. Please try again.";
+
+      // Persist assistant reply
+      await saveSupportMessage({
+        sessionId: input.sessionId,
+        userId: userId ?? undefined,
+        role: "assistant",
+        content: reply,
+      });
+
+      return { reply };
+    }),
+});
+
+// ─── App Router ─────────────────────────────────────────────────────────────
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -618,6 +703,7 @@ export const appRouter = router({
   schedules: schedulesRouter,
   billing: billingRouter,
   team: teamRouter,
+  support: supportRouter,
 });
 
 export type AppRouter = typeof appRouter;

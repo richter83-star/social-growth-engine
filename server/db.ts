@@ -11,6 +11,7 @@ import {
   learningOutcomes, InsertLearningOutcome,
   campaignSchedules, InsertCampaignSchedule,
   subscriptions, InsertSubscription,
+  supportMessages, InsertSupportMessage,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -384,6 +385,27 @@ export async function acceptTeamInvite(token: string, memberId: number, memberNa
   if (!db) throw new Error("DB unavailable");
   await db.update(teamMembers).set({ inviteAccepted: true, memberId, memberName, updatedAt: new Date() })
     .where(eq(teamMembers.inviteToken, token));
+}
+
+// ─── Support Chat ────────────────────────────────────────────────────────────
+
+export async function getSupportHistory(sessionId: string, limit = 20) {
+  const db = await getDb();
+  if (!db) return [];
+  const { desc } = await import("drizzle-orm");
+  const rows = await db
+    .select()
+    .from(supportMessages)
+    .where((await import("drizzle-orm")).eq(supportMessages.sessionId, sessionId))
+    .orderBy(desc(supportMessages.createdAt))
+    .limit(limit);
+  return rows.reverse(); // oldest first
+}
+
+export async function saveSupportMessage(data: InsertSupportMessage) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(supportMessages).values(data);
 }
 
 /** Resolve effective permissions for a user.

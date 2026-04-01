@@ -138,3 +138,15 @@
 - [x] Add a tRPC procedure `billing.testWebhook` that calls the Stripe API to send a test webhook event
 - [x] Write vitest test for the webhook handler: verify signature check, test event bypass, and checkout.session.completed processing
 - [x] Confirm webhook route is registered at /api/stripe/webhook with raw body parser
+
+## AI Support Chat Widget
+- [x] DB: add `support_messages` table (id, userId nullable, sessionId, role: user/assistant, content, createdAt)
+- [x] Backend: `support.chat` tRPC mutation — accepts message + history, calls invokeLLM with Growth Engine system prompt, returns AI reply
+- [x] Backend: `support.getHistory` tRPC query — returns last 20 messages for current session
+- [x] Knowledge base: comprehensive system prompt covering features, pricing, FAQ, troubleshooting
+- [x] Frontend: `SupportChat.tsx` floating widget — FAB button (bottom-right), slide-up chat panel
+- [x] Frontend: Chat panel — message bubbles, typing indicator, input + send button
+- [x] Frontend: Quick-reply chips for common questions (What is Growth Engine? How does pricing work? etc.)
+- [x] Frontend: Show on both landing page (unauthenticated) and dashboard (authenticated)
+- [x] Frontend: Persist session across page navigations using sessionStorage
+- [x] Tests: support.chat mutation test — verify LLM is called with correct system prompt and history

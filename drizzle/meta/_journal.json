@@ -43,6 +43,13 @@
       "when": 1775058237625,
       "tag": "0005_ancient_roland_deschain",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1775073667763,
+      "tag": "0006_silky_texas_twister",
+      "breakpoints": true
     }
   ]
 }
