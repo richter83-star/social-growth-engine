@@ -23,6 +23,16 @@ const PLATFORM_COLORS: Record<string, string> = {
   twitter: "bg-sky-500/20 text-sky-400",
   reddit: "bg-orange-500/20 text-orange-400",
   linkedin: "bg-blue-500/20 text-blue-400",
+  instagram: "bg-pink-500/20 text-pink-400",
+  tiktok: "bg-purple-500/20 text-purple-400",
+};
+
+const PLATFORM_LABELS: Record<string, string> = {
+  twitter: "Twitter",
+  reddit: "Reddit",
+  linkedin: "LinkedIn",
+  instagram: "Instagram",
+  tiktok: "TikTok",
 };
 
 export default function Campaigns() {
@@ -139,10 +149,10 @@ export default function Campaigns() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-foreground">Platforms</Label>
-                <div className="flex gap-2">
-                  {["twitter", "reddit", "linkedin"].map((p) => (
-                    <button key={p} onClick={() => togglePlatform(p)} className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-all ${form.platforms.includes(p) ? "border-primary bg-primary/20 text-primary" : "border-border bg-muted/40 text-muted-foreground hover:border-primary/40"}`}>
-                      {p.charAt(0).toUpperCase() + p.slice(1)}
+                <div className="grid grid-cols-3 gap-2">
+                  {["twitter", "reddit", "linkedin", "instagram", "tiktok"].map((p) => (
+                    <button key={p} onClick={() => togglePlatform(p)} className={`py-2 px-1 rounded-lg text-xs font-medium border transition-all ${form.platforms.includes(p) ? "border-primary bg-primary/20 text-primary" : "border-border bg-muted/40 text-muted-foreground hover:border-primary/40"}`}>
+                      {PLATFORM_LABELS[p]}
                     </button>
                   ))}
                 </div>
@@ -169,7 +179,7 @@ export default function Campaigns() {
                   <Input type="number" className="bg-input border-border text-foreground" value={form.targetEngagements} onChange={(e) => setForm((f) => ({ ...f, targetEngagements: parseInt(e.target.value) || 50 }))} />
                 </div>
               </div>
-              <Button className="w-full" disabled={!canCreate || createMutation.isPending} onClick={() => createMutation.mutate({ ...form, platforms: form.platforms as ("twitter" | "reddit" | "linkedin")[] })}>
+              <Button className="w-full" disabled={!canCreate || createMutation.isPending} onClick={() => createMutation.mutate({ ...form, platforms: form.platforms as ("twitter" | "reddit" | "linkedin" | "instagram" | "tiktok")[] })}>
                 {createMutation.isPending ? "Creating..." : "Create Campaign"}
               </Button>
             </div>
@@ -228,7 +238,7 @@ export default function Campaigns() {
 
                 <div className="flex items-center gap-2 flex-wrap mb-3">
                   {(c.platforms as string[]).map((p) => (
-                    <span key={p} className={`text-xs px-2 py-0.5 rounded-md font-medium capitalize ${PLATFORM_COLORS[p] ?? "bg-muted text-muted-foreground"}`}>{p}</span>
+                    <span key={p} className={`text-xs px-2 py-0.5 rounded-md font-medium ${PLATFORM_COLORS[p] ?? "bg-muted text-muted-foreground"}`}>{PLATFORM_LABELS[p] ?? p}</span>
                   ))}
                 </div>
 

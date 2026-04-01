@@ -33,7 +33,7 @@ const accountsRouter = router({
 
   create: protectedProcedure
     .input(z.object({
-      platform: z.enum(["twitter", "reddit", "linkedin"]),
+      platform: z.enum(["twitter", "reddit", "linkedin", "instagram", "tiktok"]),
       handle: z.string().min(1).max(128),
       displayName: z.string().optional(),
       avatarUrl: z.string().optional(),
@@ -86,7 +86,7 @@ const campaignsRouter = router({
       name: z.string().min(1).max(256),
       description: z.string().optional(),
       keywords: z.array(z.string()).min(1),
-      platforms: z.array(z.enum(["twitter", "reddit", "linkedin"])).min(1),
+      platforms: z.array(z.enum(["twitter", "reddit", "linkedin", "instagram", "tiktok"])).min(1),
       persona: z.string().min(10),
       playbook: z.enum(["3_day_warmup", "direct_negotiator"]).default("direct_negotiator"),
       targetEngagements: z.number().default(50),
@@ -181,7 +181,7 @@ const discoveryRouter = router({
         const saved_thread = await createThread({
           campaignId: input.campaignId,
           userId: ctx.user.id,
-          platform: t.platform as "twitter" | "reddit" | "linkedin",
+          platform: t.platform as "twitter" | "reddit" | "linkedin" | "instagram" | "tiktok",
           threadUrl: t.url,
           threadTitle: t.title,
           threadContent: t.content,

@@ -29,7 +29,7 @@ export type InsertUser = typeof users.$inferInsert;
 export const socialAccounts = mysqlTable("social_accounts", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
-  platform: mysqlEnum("platform", ["twitter", "reddit", "linkedin"]).notNull(),
+  platform: mysqlEnum("platform", ["twitter", "reddit", "linkedin", "instagram", "tiktok"]).notNull(),
   handle: varchar("handle", { length: 128 }).notNull(),
   displayName: varchar("displayName", { length: 256 }),
   avatarUrl: text("avatarUrl"),
@@ -75,7 +75,7 @@ export const discoveredThreads = mysqlTable("discovered_threads", {
   id: int("id").autoincrement().primaryKey(),
   campaignId: int("campaignId").notNull(),
   userId: int("userId").notNull(),
-  platform: mysqlEnum("platform", ["twitter", "reddit", "linkedin"]).notNull(),
+  platform: mysqlEnum("platform", ["twitter", "reddit", "linkedin", "instagram", "tiktok"]).notNull(),
   threadUrl: text("threadUrl").notNull(),
   threadTitle: text("threadTitle").notNull(),
   threadContent: text("threadContent"),

@@ -75,16 +75,26 @@
 - [x] Tests: inline editor mutation test
 
 ## Role & Permission System
-- [ ] DB: add `team_members` table (userId, ownerId, role: owner/editor/reviewer, permissions JSON)
-- [ ] DB: permissions JSON schema: { canEdit, canApprove, canReject, canDiscover, canManageCampaigns }
-- [ ] Backend: `teamRouter` — invite member, list members, update role/permissions, remove member
-- [ ] Backend: permission guard middleware — check user permissions before engagement mutations
-- [ ] Backend: engagement.updateStatus — gate edit/approve/reject by permission flags
-- [ ] Backend: `roles.getMyPermissions` — return current user's effective permissions
-- [ ] Frontend: Role Management page (/team) — list members, assign roles, toggle permissions
-- [ ] Frontend: Engagement Queue — hide Edit button if canEdit=false
-- [ ] Frontend: Engagement Queue — hide Approve button if canApprove=false
-- [ ] Frontend: Engagement Queue — hide Reject button if canReject=false
-- [ ] Frontend: Show permission-denied toast when action is blocked
-- [ ] Frontend: Add Team nav item to sidebar
-- [ ] Tests: permission guard tests (owner can do all, reviewer can only approve/reject, viewer blocked)
+- [x] DB: add `team_members` table (userId, ownerId, role: owner/editor/reviewer, permissions JSON)
+- [x] DB: permissions JSON schema: { canEdit, canApprove, canReject, canDiscover, canManageCampaigns }
+- [x] Backend: `teamRouter` — invite member, list members, update role/permissions, remove member
+- [x] Backend: permission guard middleware — check user permissions before engagement mutations
+- [x] Backend: engagement.updateStatus — gate edit/approve/reject by permission flags
+- [x] Backend: `roles.getMyPermissions` — return current user's effective permissions
+- [x] Frontend: Role Management page (/team) — list members, assign roles, toggle permissions
+- [x] Frontend: Engagement Queue — hide Edit button if canEdit=false
+- [x] Frontend: Engagement Queue — hide Approve button if canApprove=false
+- [x] Frontend: Engagement Queue — hide Reject button if canReject=false
+- [x] Frontend: Show permission-denied toast when action is blocked
+- [x] Frontend: Add Team nav item to sidebar
+- [x] Tests: permission guard tests (owner can do all, reviewer can only approve/reject, viewer blocked)
+
+## Instagram & TikTok Platform Support
+- [ ] DB: add `instagram` and `tiktok` to the `platform` enum in `socialAccounts` table
+- [ ] DB: add `instagram` and `tiktok` to the `platforms` JSON array validation in `campaigns` table
+- [ ] Backend: update Zod platform enum in accounts.create and campaigns.create procedures
+- [ ] Frontend: Accounts page — add Instagram and TikTok to platform dropdown with icons
+- [ ] Frontend: Campaigns page — add Instagram and TikTok to platform multi-select
+- [ ] Frontend: Discovery page — show Instagram/TikTok platform badges
+- [ ] Frontend: Accounts page — show correct platform color/icon for Instagram and TikTok cards
+- [ ] Tests: update platform validation tests to include instagram and tiktok

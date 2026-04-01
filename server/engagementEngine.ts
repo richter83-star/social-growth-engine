@@ -32,6 +32,8 @@ const PLATFORM_PERSONAS: Record<string, string> = {
   twitter: "conversational, punchy, max 280 chars, uses relevant hashtags sparingly",
   reddit: "detailed, adds genuine value, references the specific post, no self-promotion",
   linkedin: "professional, insightful, thought-leadership tone, 2-3 sentences",
+  instagram: "friendly, visual-oriented, uses 2-3 relevant emojis naturally, short and engaging, 1-2 sentences",
+  tiktok: "casual, energetic, trend-aware, uses popular phrases, short punchy comment under 150 chars",
 };
 
 // Simulate SocialMonitorService thread discovery with LLM-generated realistic data

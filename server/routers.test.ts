@@ -165,8 +165,22 @@ describe("accounts", () => {
     const { ctx } = createAuthContext();
     const caller = appRouter.createCaller(ctx);
     await expect(
-      caller.accounts.create({ platform: "tiktok" as "twitter", handle: "test" })
+      caller.accounts.create({ platform: "myspace" as "twitter", handle: "test" })
     ).rejects.toThrow();
+  });
+
+  it("creates an instagram account", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.accounts.create({ platform: "instagram", handle: "myinstahandle" });
+    expect(result).toBeDefined();
+  });
+
+  it("creates a tiktok account", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.accounts.create({ platform: "tiktok", handle: "mytiktokhandle" });
+    expect(result).toBeDefined();
   });
 });
 

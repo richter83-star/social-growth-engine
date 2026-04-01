@@ -1,0 +1,2 @@
+ALTER TABLE `discovered_threads` MODIFY COLUMN `platform` enum('twitter','reddit','linkedin','instagram','tiktok') NOT NULL;--> statement-breakpoint
+ALTER TABLE `social_accounts` MODIFY COLUMN `platform` enum('twitter','reddit','linkedin','instagram','tiktok') NOT NULL;

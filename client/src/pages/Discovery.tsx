@@ -10,6 +10,16 @@ const PLATFORM_COLORS: Record<string, string> = {
   twitter: "bg-sky-500/20 text-sky-400 border-sky-500/30",
   reddit: "bg-orange-500/20 text-orange-400 border-orange-500/30",
   linkedin: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+  instagram: "bg-pink-500/20 text-pink-400 border-pink-500/30",
+  tiktok: "bg-purple-500/20 text-purple-400 border-purple-500/30",
+};
+
+const PLATFORM_LABELS: Record<string, string> = {
+  twitter: "Twitter",
+  reddit: "Reddit",
+  linkedin: "LinkedIn",
+  instagram: "Instagram",
+  tiktok: "TikTok",
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -177,7 +187,7 @@ export default function Discovery() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         <span className={`text-xs font-medium px-2 py-0.5 rounded-md border ${PLATFORM_COLORS[t.platform] ?? "bg-muted text-muted-foreground border-border"}`}>
-                          {t.platform}
+                          {PLATFORM_LABELS[t.platform] ?? t.platform}
                         </span>
                         <span className={`text-xs px-2 py-0.5 rounded-md capitalize ${STATUS_COLORS[t.status]}`}>
                           {t.status}
