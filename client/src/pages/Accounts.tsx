@@ -8,10 +8,24 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
-import { Users, Plus, Trash2, RefreshCw, Twitter, Linkedin } from "lucide-react";
+import { Users, Plus, Trash2, RefreshCw, Twitter, Linkedin, CheckCircle2, AlertCircle, Clock } from "lucide-react";
 
 type Platform = "twitter" | "reddit" | "linkedin" | "instagram" | "tiktok";
+
+type SyncStatus = "idle" | "loading" | "success" | "quota_exceeded" | "not_supported" | "error";
+
+type SyncResult = {
+  id: number;
+  platform: string;
+  handle: string;
+  status: "success" | "quota_exceeded" | "not_supported" | "error";
+  followers?: number;
+  following?: number;
+  displayName?: string;
+  error?: string;
+};
 
 // SVG icons for platforms not in lucide-react
 const RedditIcon = ({ className }: { className?: string }) => (
@@ -58,6 +72,24 @@ const PLATFORM_LABELS: Record<string, string> = {
 
 const PLATFORMS: Platform[] = ["twitter", "reddit", "linkedin", "instagram", "tiktok"];
 
+function SyncStatusIcon({ status }: { status: SyncStatus }) {
+  if (status === "loading") return <RefreshCw className="h-3.5 w-3.5 animate-spin text-primary" />;
+  if (status === "success") return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />;
+  if (status === "quota_exceeded") return <AlertCircle className="h-3.5 w-3.5 text-amber-400" />;
+  if (status === "not_supported") return <Clock className="h-3.5 w-3.5 text-muted-foreground" />;
+  if (status === "error") return <AlertCircle className="h-3.5 w-3.5 text-destructive" />;
+  return null;
+}
+
+function syncStatusLabel(status: SyncStatus, result?: SyncResult): string {
+  if (status === "loading") return "Syncing…";
+  if (status === "success") return result?.followers !== undefined ? `${result.followers.toLocaleString()} followers` : "Profile updated";
+  if (status === "quota_exceeded") return "API quota exceeded";
+  if (status === "not_supported") return "Sync not available";
+  if (status === "error") return result?.error ?? "Sync failed";
+  return "";
+}
+
 export default function Accounts() {
   const utils = trpc.useUtils();
   const { data: accounts, isLoading } = trpc.accounts.list.useQuery();
@@ -77,6 +109,35 @@ export default function Accounts() {
   const updateMutation = trpc.accounts.update.useMutation({
     onSuccess: () => { utils.accounts.list.invalidate(); },
   });
+  const syncMutation = trpc.accounts.syncStats.useMutation({
+    onSuccess: (results) => {
+      utils.accounts.list.invalidate();
+      // Update per-account sync status
+      const newStatuses: Record<number, SyncStatus> = {};
+      const newResults: Record<number, SyncResult> = {};
+      for (const r of results) {
+        newStatuses[r.id] = r.status as SyncStatus;
+        newResults[r.id] = r;
+      }
+      setSyncStatuses(prev => ({ ...prev, ...newStatuses }));
+      setSyncResults(prev => ({ ...prev, ...newResults }));
+      setSyncingAll(false);
+
+      const succeeded = results.filter(r => r.status === "success").length;
+      const failed = results.filter(r => r.status === "error").length;
+      const quota = results.filter(r => r.status === "quota_exceeded").length;
+      const unsupported = results.filter(r => r.status === "not_supported").length;
+
+      if (succeeded > 0) toast.success(`Synced ${succeeded} account${succeeded > 1 ? "s" : ""} successfully`);
+      if (quota > 0) toast.warning(`${quota} account${quota > 1 ? "s" : ""}: API quota exceeded — try again next month`);
+      if (unsupported > 0) toast.info(`${unsupported} platform${unsupported > 1 ? "s" : ""} not yet supported for sync`);
+      if (failed > 0) toast.error(`${failed} account${failed > 1 ? "s" : ""} failed to sync`);
+    },
+    onError: (e) => {
+      setSyncingAll(false);
+      toast.error(`Sync failed: ${e.message}`);
+    },
+  });
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<{ platform: Platform; handle: string; displayName: string }>({
@@ -84,6 +145,23 @@ export default function Accounts() {
     handle: "",
     displayName: "",
   });
+  const [syncStatuses, setSyncStatuses] = useState<Record<number, SyncStatus>>({});
+  const [syncResults, setSyncResults] = useState<Record<number, SyncResult>>({});
+  const [syncingAll, setSyncingAll] = useState(false);
+
+  const handleSyncOne = (accountId: number) => {
+    setSyncStatuses(prev => ({ ...prev, [accountId]: "loading" }));
+    syncMutation.mutate({ id: accountId });
+  };
+
+  const handleSyncAll = () => {
+    if (!accounts || accounts.length === 0) return;
+    setSyncingAll(true);
+    const allLoading: Record<number, SyncStatus> = {};
+    for (const a of accounts) allLoading[a.id] = "loading";
+    setSyncStatuses(allLoading);
+    syncMutation.mutate({ id: 0 });
+  };
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -95,80 +173,100 @@ export default function Accounts() {
           </h1>
           <p className="text-muted-foreground text-sm mt-1">Manage your connected social media profiles</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2"><Plus className="h-4 w-4" />Add Account</Button>
-          </DialogTrigger>
-          <DialogContent className="bg-card border-border">
-            <DialogHeader>
-              <DialogTitle className="text-foreground">Connect Social Account</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-2">
-              <div className="space-y-1.5">
-                <Label className="text-foreground">Platform</Label>
-                <Select value={form.platform} onValueChange={(v) => setForm((f) => ({ ...f, platform: v as Platform }))}>
-                  <SelectTrigger className="bg-input border-border text-foreground">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-card border-border">
-                    {PLATFORMS.map((p) => {
-                      const Icon = PLATFORM_ICONS[p];
-                      const color = PLATFORM_COLORS[p];
-                      return (
-                        <SelectItem key={p} value={p}>
-                          <div className="flex items-center gap-2">
-                            <span className={`inline-flex p-1 rounded ${color}`}>
-                              <Icon className="h-3.5 w-3.5" />
-                            </span>
-                            {PLATFORM_LABELS[p]}
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-foreground">Handle / Username</Label>
-                <Input
-                  className="bg-input border-border text-foreground placeholder:text-muted-foreground"
-                  placeholder="@yourusername"
-                  value={form.handle}
-                  onChange={(e) => setForm((f) => ({ ...f, handle: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-foreground">Display Name (optional)</Label>
-                <Input
-                  className="bg-input border-border text-foreground placeholder:text-muted-foreground"
-                  placeholder="Your Name"
-                  value={form.displayName}
-                  onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))}
-                />
-              </div>
-              {/* Platform-specific hint */}
-              {(form.platform === "instagram" || form.platform === "tiktok") && (
-                <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
-                  <p className="text-xs text-purple-300">
-                    {form.platform === "instagram"
-                      ? "Instagram monitoring tracks hashtag engagement and comment opportunities on public posts."
-                      : "TikTok monitoring discovers trending videos and comment threads matching your campaign keywords."}
-                  </p>
+        <div className="flex items-center gap-2">
+          {accounts && accounts.length > 0 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  disabled={syncingAll || syncMutation.isPending}
+                  onClick={handleSyncAll}
+                >
+                  <RefreshCw className={`h-4 w-4 ${syncingAll ? "animate-spin" : ""}`} />
+                  Sync All
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-xs">Pull live follower counts from Twitter &amp; LinkedIn APIs</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2"><Plus className="h-4 w-4" />Add Account</Button>
+            </DialogTrigger>
+            <DialogContent className="bg-card border-border">
+              <DialogHeader>
+                <DialogTitle className="text-foreground">Connect Social Account</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                <div className="space-y-1.5">
+                  <Label className="text-foreground">Platform</Label>
+                  <Select value={form.platform} onValueChange={(v) => setForm((f) => ({ ...f, platform: v as Platform }))}>
+                    <SelectTrigger className="bg-input border-border text-foreground">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-card border-border">
+                      {PLATFORMS.map((p) => {
+                        const Icon = PLATFORM_ICONS[p];
+                        const color = PLATFORM_COLORS[p];
+                        return (
+                          <SelectItem key={p} value={p}>
+                            <div className="flex items-center gap-2">
+                              <span className={`inline-flex p-1 rounded ${color}`}>
+                                <Icon className="h-3.5 w-3.5" />
+                              </span>
+                              {PLATFORM_LABELS[p]}
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
-              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                <p className="text-xs text-amber-400">Credentials are stored securely and encrypted. This demo connects accounts in monitoring mode.</p>
+                <div className="space-y-1.5">
+                  <Label className="text-foreground">Handle / Username</Label>
+                  <Input
+                    className="bg-input border-border text-foreground placeholder:text-muted-foreground"
+                    placeholder="@yourusername"
+                    value={form.handle}
+                    onChange={(e) => setForm((f) => ({ ...f, handle: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-foreground">Display Name (optional)</Label>
+                  <Input
+                    className="bg-input border-border text-foreground placeholder:text-muted-foreground"
+                    placeholder="Your Name"
+                    value={form.displayName}
+                    onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))}
+                  />
+                </div>
+                {/* Platform-specific hint */}
+                {(form.platform === "instagram" || form.platform === "tiktok") && (
+                  <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                    <p className="text-xs text-purple-300">
+                      {form.platform === "instagram"
+                        ? "Instagram monitoring tracks hashtag engagement and comment opportunities on public posts."
+                        : "TikTok monitoring discovers trending videos and comment threads matching your campaign keywords."}
+                    </p>
+                  </div>
+                )}
+                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-xs text-amber-400">Credentials are stored securely and encrypted. This demo connects accounts in monitoring mode.</p>
+                </div>
+                <Button
+                  className="w-full"
+                  disabled={!form.handle || createMutation.isPending}
+                  onClick={() => createMutation.mutate({ platform: form.platform, handle: form.handle, displayName: form.displayName || undefined })}
+                >
+                  {createMutation.isPending ? "Connecting..." : `Connect ${PLATFORM_LABELS[form.platform]} Account`}
+                </Button>
               </div>
-              <Button
-                className="w-full"
-                disabled={!form.handle || createMutation.isPending}
-                onClick={() => createMutation.mutate({ platform: form.platform, handle: form.handle, displayName: form.displayName || undefined })}
-              >
-                {createMutation.isPending ? "Connecting..." : `Connect ${PLATFORM_LABELS[form.platform]} Account`}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {isLoading ? (
@@ -193,8 +291,12 @@ export default function Accounts() {
           {accounts.map((acc) => {
             const PlatformIcon = PLATFORM_ICONS[acc.platform] ?? Users;
             const colorClass = PLATFORM_COLORS[acc.platform] ?? "text-muted-foreground bg-muted";
+            const syncStatus = syncStatuses[acc.id] ?? "idle";
+            const syncResult = syncResults[acc.id];
+            const isSyncing = syncStatus === "loading";
+
             return (
-              <Card key={acc.id} className="bg-card border-border hover:border-primary/30 transition-all">
+              <Card key={acc.id} className={`bg-card border-border hover:border-primary/30 transition-all ${isSyncing ? "opacity-80" : ""}`}>
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
@@ -206,7 +308,24 @@ export default function Accounts() {
                         <p className="text-xs text-muted-foreground">@{acc.handle}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
+                      {/* Sync Stats button */}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                            disabled={isSyncing || syncMutation.isPending}
+                            onClick={() => handleSyncOne(acc.id)}
+                          >
+                            <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs">Sync live stats from {PLATFORM_LABELS[acc.platform]}</p>
+                        </TooltipContent>
+                      </Tooltip>
                       <Switch
                         checked={acc.isActive}
                         onCheckedChange={(v) => updateMutation.mutate({ id: acc.id, isActive: v })}
@@ -221,6 +340,7 @@ export default function Accounts() {
                       </Button>
                     </div>
                   </div>
+
                   <div className="grid grid-cols-3 gap-3">
                     <div className="text-center p-2 rounded-lg bg-muted/40">
                       <p className="text-lg font-bold text-foreground">{(acc.followers ?? 0).toLocaleString()}</p>
@@ -235,19 +355,50 @@ export default function Accounts() {
                       <p className="text-xs text-muted-foreground">Eng. Rate</p>
                     </div>
                   </div>
+
                   <div className="flex items-center justify-between mt-3">
                     <Badge variant="outline" className={`text-xs capitalize border-0 ${colorClass}`}>
                       {PLATFORM_LABELS[acc.platform] ?? acc.platform}
                     </Badge>
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <RefreshCw className="h-3 w-3" />
-                      {acc.lastSynced ? new Date(acc.lastSynced).toLocaleDateString() : "Never synced"}
-                    </span>
+
+                    {/* Sync status row */}
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      {syncStatus !== "idle" && (
+                        <>
+                          <SyncStatusIcon status={syncStatus} />
+                          <span className={`text-xs ${
+                            syncStatus === "success" ? "text-emerald-400" :
+                            syncStatus === "quota_exceeded" ? "text-amber-400" :
+                            syncStatus === "error" ? "text-destructive" :
+                            "text-muted-foreground"
+                          }`}>
+                            {syncStatusLabel(syncStatus, syncResult)}
+                          </span>
+                          <span className="text-muted-foreground/40 text-xs">·</span>
+                        </>
+                      )}
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <RefreshCw className="h-3 w-3" />
+                        {acc.lastSynced ? `Synced ${new Date(acc.lastSynced).toLocaleDateString()}` : "Never synced"}
+                      </span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
             );
           })}
+        </div>
+      )}
+
+      {/* API coverage info banner */}
+      {accounts && accounts.length > 0 && (
+        <div className="rounded-lg border border-border/50 bg-muted/20 p-4">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            <span className="font-medium text-foreground">Sync coverage:</span>{" "}
+            <span className="text-sky-400">Twitter/X</span> — live follower &amp; following counts via public API.{" "}
+            <span className="text-blue-400">LinkedIn</span> — display name sync (follower counts not exposed by LinkedIn's API).{" "}
+            <span className="text-muted-foreground">Instagram, TikTok, Reddit</span> — coming soon.
+          </p>
         </div>
       )}
     </div>

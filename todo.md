@@ -212,3 +212,15 @@
 - [x] No user name, email, or personal data visible before login
 - [x] Landing page is the true public entry point — clean, enterprise-grade
 - [x] Login button on landing page triggers Manus OAuth flow
+
+## Sync Account Stats
+- [x] Backend: accounts.syncStats tRPC mutation — calls platform APIs per account, returns { followers, following, profileName, syncedAt, error? }
+- [x] Backend: Twitter sync — calls Twitter/get_user_profile_by_username, extracts legacy.followers_count and legacy.friends_count
+- [x] Backend: LinkedIn sync — calls LinkedIn/get_user_profile_by_username, extracts firstName+lastName as profileName (no follower count available)
+- [x] Backend: Instagram/TikTok/Reddit — return graceful "not supported yet" status
+- [x] Backend: Update social_accounts row with new followers/following/lastSyncedAt on success
+- [x] Frontend: Accounts page — "Sync Stats" button per account card (RefreshCw icon)
+- [x] Frontend: Accounts page — global "Sync All" button in page header
+- [x] Frontend: Show last synced timestamp below follower count on each card
+- [x] Frontend: Show per-account sync status: loading spinner, success checkmark, error badge
+- [x] Tests: syncStats mutation test — verify Twitter path calls API and updates DB

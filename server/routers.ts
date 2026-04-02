@@ -18,6 +18,7 @@ import {
 import {
   discoverThreads, generateEngagement, computeLearningInsights,
 } from "./engagementEngine";
+import { callDataApi } from "./_core/dataApi";
 import { notifyOwner } from "./_core/notification";
 import { registerSchedule, stopSchedule, triggerScheduleNow } from "./scheduler";
 import {
@@ -79,6 +80,117 @@ const accountsRouter = router({
   delete: protectedProcedure
     .input(z.object({ id: z.number() }))
     .mutation(({ ctx, input }) => deleteAccount(input.id, ctx.user.id)),
+
+  syncStats: protectedProcedure
+    .input(z.object({
+      id: z.number(),        // account id to sync; 0 = sync all accounts for this user
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const accounts = await getAccountsByUser(ctx.user.id);
+      const targets = input.id === 0
+        ? accounts
+        : accounts.filter(a => a.id === input.id);
+
+      if (targets.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Account not found" });
+      }
+
+      const results: Array<{
+        id: number;
+        platform: string;
+        handle: string;
+        status: "success" | "quota_exceeded" | "not_supported" | "error";
+        followers?: number;
+        following?: number;
+        displayName?: string;
+        error?: string;
+      }> = [];
+
+      for (const account of targets) {
+        try {
+          if (account.platform === "twitter") {
+            const raw = await callDataApi("Twitter/get_user_profile_by_username", {
+              query: { username: account.handle.replace(/^@/, "") },
+            }) as Record<string, unknown>;
+
+            // Detect quota / rate-limit errors
+            const msg = (raw?.message as string) ?? "";
+            const code = (raw?.code as string) ?? "";
+            if (msg.toLowerCase().includes("quota") || msg.toLowerCase().includes("exceeded") || code === "failed_precondition") {
+              results.push({ id: account.id, platform: account.platform, handle: account.handle, status: "quota_exceeded", error: "Twitter API monthly quota exceeded" });
+              continue;
+            }
+
+            // Navigate the nested response: result.data.user.result.legacy
+            const userData = (raw as any)?.result?.data?.user?.result;
+            const legacy = userData?.legacy ?? {};
+            const core = userData?.core ?? {};
+            const followers = typeof legacy.followers_count === "number" ? legacy.followers_count : undefined;
+            const following = typeof legacy.friends_count === "number" ? legacy.friends_count : undefined;
+            const displayName = core.name ?? legacy.name ?? undefined;
+
+            if (followers !== undefined) {
+              await updateAccount(account.id, ctx.user.id, {
+                followers,
+                following: following ?? account.following ?? 0,
+                displayName: displayName ?? account.displayName ?? account.handle,
+                lastSynced: new Date(),
+              });
+              results.push({ id: account.id, platform: account.platform, handle: account.handle, status: "success", followers, following, displayName });
+            } else {
+              // Response came back but no follower data — possibly private or not found
+              await updateAccount(account.id, ctx.user.id, { lastSynced: new Date() });
+              results.push({ id: account.id, platform: account.platform, handle: account.handle, status: "error", error: "Profile not found or private" });
+            }
+
+          } else if (account.platform === "linkedin") {
+            const raw = await callDataApi("LinkedIn/get_user_profile_by_username", {
+              query: { username: account.handle.replace(/^@/, "") },
+            }) as Record<string, unknown>;
+
+            // LinkedIn API does not expose follower counts publicly
+            // We can still pull the display name
+            if (raw?.success === false) {
+              results.push({ id: account.id, platform: account.platform, handle: account.handle, status: "error", error: (raw.message as string) ?? "Profile not accessible" });
+              continue;
+            }
+
+            const firstName = (raw.firstName as string) ?? "";
+            const lastName = (raw.lastName as string) ?? "";
+            const displayName = [firstName, lastName].filter(Boolean).join(" ") || undefined;
+
+            await updateAccount(account.id, ctx.user.id, {
+              displayName: displayName ?? account.displayName ?? account.handle,
+              lastSynced: new Date(),
+            });
+            results.push({
+              id: account.id,
+              platform: account.platform,
+              handle: account.handle,
+              status: "success",
+              displayName,
+              error: "Follower count not available via LinkedIn API",
+            });
+
+          } else {
+            // Instagram, TikTok, Reddit — no public API available in hub
+            await updateAccount(account.id, ctx.user.id, { lastSynced: new Date() });
+            results.push({
+              id: account.id,
+              platform: account.platform,
+              handle: account.handle,
+              status: "not_supported",
+              error: `${account.platform} sync not yet supported`,
+            });
+          }
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : "Unknown error";
+          results.push({ id: account.id, platform: account.platform, handle: account.handle, status: "error", error: message });
+        }
+      }
+
+      return results;
+    }),
 });
 
 // --- Campaigns Router ---------------------------------------------------------
