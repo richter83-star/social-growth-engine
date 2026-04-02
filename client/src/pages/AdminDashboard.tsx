@@ -2,6 +2,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
+import { LoginGate } from "@/components/LoginGate";
 import {
   Users, DollarSign, TrendingUp, Activity, MessageSquare,
   Server, Search, ChevronDown, ChevronUp, RefreshCw,
@@ -708,8 +709,13 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
 
-  // Redirect non-admins
-  if (!authLoading && (!user || (user as { role?: string }).role !== "admin")) {
+  // Show login gate for unauthenticated users
+  if (!authLoading && !user) {
+    return <LoginGate />;
+  }
+
+  // Redirect non-admin authenticated users back to the dashboard
+  if (!authLoading && user && (user as { role?: string }).role !== "admin") {
     navigate("/dashboard");
     return null;
   }

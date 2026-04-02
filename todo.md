@@ -205,3 +205,10 @@
 - [x] Frontend: reason survey — 4 radio options: Too expensive / Not using it / Missing features / Other
 - [x] Admin Dashboard Revenue tab: churn reasons donut/bar chart
 - [x] Tests: cancellation with reason saves to DB; admin.getChurnReasons returns correct breakdown
+
+## Login Gate / Auth Wall
+- [x] All protected routes redirect unauthenticated users to the landing page with login CTA
+- [x] DashboardLayout shows a full-screen login prompt (not the dashboard) when unauthenticated
+- [x] No user name, email, or personal data visible before login
+- [x] Landing page is the true public entry point — clean, enterprise-grade
+- [x] Login button on landing page triggers Manus OAuth flow
