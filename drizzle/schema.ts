@@ -20,6 +20,15 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  onboardingCompleted: boolean("onboardingCompleted").default(false).notNull(),
+  onboardingData: json("onboardingData").$type<{
+    industry?: string;
+    platforms?: string[];
+    goal?: string;
+    businessName?: string;
+    completedAt?: string;
+  } | null>().default(null),
+  referralCode: varchar("referralCode", { length: 16 }).unique(),
 });
 
 export type User = typeof users.$inferSelect;
@@ -270,3 +279,17 @@ export const churnReasons = mysqlTable("churn_reasons", {
 });
 export type ChurnReason = typeof churnReasons.$inferSelect;
 export type InsertChurnReason = typeof churnReasons.$inferInsert;
+
+// Referral program
+export const referrals = mysqlTable("referrals", {
+  id: int("id").autoincrement().primaryKey(),
+  referrerId: int("referrerId").notNull(),          // user who shared the code
+  referredUserId: int("referredUserId").notNull(),  // user who signed up via the code
+  code: varchar("code", { length: 16 }).notNull(),  // the referral code used
+  status: mysqlEnum("status", ["pending", "converted"]).default("pending").notNull(),
+  creditedAt: timestamp("creditedAt"),              // when the referrer received credit
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Referral = typeof referrals.$inferSelect;
+export type InsertReferral = typeof referrals.$inferInsert;

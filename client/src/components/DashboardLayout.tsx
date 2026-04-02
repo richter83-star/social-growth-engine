@@ -20,7 +20,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, Megaphone, Search, MessageSquareMore, BarChart3, Zap, Calendar, CreditCard, Crown, Shield, HelpCircle } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, Megaphone, Search, MessageSquareMore, BarChart3, Zap, Calendar, CreditCard, Crown, Shield, HelpCircle, Gift } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -38,6 +38,7 @@ const menuItems = [
   { icon: CreditCard, label: "Billing", path: "/billing" },
   { icon: Shield, label: "Team", path: "/team" },
   { icon: HelpCircle, label: "Help", path: "/help" },
+  { icon: Gift, label: "Refer & Earn", path: "/referrals" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Search, Zap, ExternalLink, Bot, Loader2, TrendingUp } from "lucide-react";
+import { Search, Zap, ExternalLink, Bot, Loader2, TrendingUp, Lock } from "lucide-react";
 
 const PLATFORM_COLORS: Record<string, string> = {
   twitter: "bg-sky-500/20 text-sky-400 border-sky-500/30",
@@ -75,6 +75,15 @@ export default function Discovery() {
 
   const activeCampaigns = campaigns?.filter((c) => c.status === "active") ?? [];
   const displayThreads = selectedCampaignId ? (threads ?? []) : (recentThreads ?? []);
+
+  // Subscription tier from billing data
+  const { data: billing } = trpc.billing.getSubscription.useQuery();
+  const plan = billing?.plan ?? "free";
+  // Free plan: 50 threads/month visible, rest locked
+  const FREE_THREAD_LIMIT = 50;
+  const isFreePlan = plan === "free";
+  const visibleThreads = isFreePlan ? displayThreads.slice(0, FREE_THREAD_LIMIT) : displayThreads;
+  const lockedCount = isFreePlan ? Math.max(0, displayThreads.length - FREE_THREAD_LIMIT) : 0;
 
   return (
     <div className="space-y-6 max-w-6xl">
@@ -181,7 +190,7 @@ export default function Discovery() {
             </div>
           ) : (
             <div className="space-y-3">
-              {displayThreads.map((t) => (
+              {visibleThreads.map((t) => (
                 <div key={t.id} className="p-4 rounded-xl bg-muted/30 border border-border hover:border-primary/30 transition-all">
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div className="flex-1 min-w-0">
@@ -241,6 +250,41 @@ export default function Discovery() {
                   </div>
                 </div>
               ))}
+              {/* Locked threads upsell */}
+              {lockedCount > 0 && (
+                <div className="relative">
+                  {/* Blurred preview of next 3 threads */}
+                  {displayThreads.slice(FREE_THREAD_LIMIT, FREE_THREAD_LIMIT + 3).map((t) => (
+                    <div key={t.id} className="p-4 rounded-xl bg-muted/30 border border-border mb-3 blur-sm select-none pointer-events-none opacity-60">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground">{t.platform}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400">High Intent</span>
+                      </div>
+                      <div className="h-4 bg-muted/60 rounded w-3/4 mb-2" />
+                      <div className="h-3 bg-muted/40 rounded w-full" />
+                    </div>
+                  ))}
+                  {/* Upgrade overlay */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl border border-violet-500/30 p-6 text-center">
+                    <div className="w-12 h-12 rounded-full bg-violet-500/20 flex items-center justify-center mb-3">
+                      <Lock className="h-5 w-5 text-violet-400" />
+                    </div>
+                    <p className="text-sm font-semibold text-foreground mb-1">
+                      {lockedCount} more thread{lockedCount !== 1 ? "s" : ""} discovered
+                    </p>
+                    <p className="text-xs text-muted-foreground mb-4 max-w-xs">
+                      You've reached the 50 thread/month limit on the Free plan. Upgrade to Pro for unlimited threads.
+                    </p>
+                    <a href="/billing">
+                      <Button size="sm" className="bg-violet-600 hover:bg-violet-500 text-white gap-2">
+                        <Zap className="h-3.5 w-3.5" />
+                        Upgrade to Pro — $49/mo
+                      </Button>
+                    </a>
+                    <p className="text-xs text-muted-foreground mt-2">Unlimited threads · 5 campaigns · Priority support</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

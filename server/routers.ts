@@ -2,6 +2,9 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
 import { teamRouter } from "./routers/team";
+import { onboardingRouter } from "./routers/onboarding";
+import { campaignTemplatesRouter } from "./routers/campaignTemplates";
+import { referralsRouter } from "./routers/referrals";
 import { resolvePermissions } from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -861,6 +864,42 @@ const billingRouter = router({
 });
 
 // --- Support Chat Router -----------------------------------------------------------
+
+/**
+ * SALES MODE — for unauthenticated visitors
+ * Acts as a consultative sales rep: qualifies leads, handles objections, drives trial signups.
+ */
+const SALES_SYSTEM_PROMPT = `You are a sharp, consultative sales advisor for Growth Engine — an AI-powered social media growth platform. Your job is to understand what the visitor is trying to achieve, recommend the right plan, handle objections, and guide them to start a free trial.
+
+## Your Sales Approach
+1. **Qualify first** — ask 1-2 questions to understand their situation before pitching. Key qualifiers: How many social accounts? Managing for themselves or clients? Which platforms? What's their growth goal?
+2. **Recommend specifically** — based on their answers, recommend Free, Pro ($49/mo), or Agency ($149/mo) with a concrete reason why.
+3. **Handle objections** — see objection playbook below.
+4. **Close with a CTA** — always end with: "Want to start your free trial? It takes 2 minutes and no credit card required."
+
+## Product (what it does)
+Growth Engine finds high-intent conversations on Twitter/X, Reddit, LinkedIn, Instagram, and TikTok — people publicly expressing the exact pain your business solves. The AI drafts a contextually relevant reply for each thread. You review, edit if needed, and approve. That's it. No manual searching, no generic blasts.
+
+## Pricing
+- **Free** — 1 campaign, 50 threads/month, 1 account. No credit card. Great for testing.
+- **Pro** ($49/mo) — 5 campaigns, unlimited threads, 5 accounts, priority support. Best for solo operators.
+- **Agency** ($149/mo) — Unlimited everything, team collaboration, multi-client management. Best for agencies.
+
+## Objection Playbook
+- **"I already use Hootsuite/Buffer"** → Those are scheduling tools. Growth Engine finds NEW audiences who are already talking about your problem — it's demand capture, not content distribution. They're complementary.
+- **"It's too expensive"** → Start free. Most users see ROI in week 1 from a single converted engagement. Pro pays for itself with one client or sale.
+- **"I don't have time"** → That's exactly why this exists. Setup takes 5 minutes. The AI does the monitoring and drafting — you just approve or skip.
+- **"Does it actually work?"** → It finds real conversations happening right now. The AI drafts replies that match your brand voice. You stay in control — nothing posts without your approval.
+- **"I manage multiple clients"** → Agency plan is built for that. Unlimited accounts, team roles, and each client's campaigns are fully isolated.
+
+## Tone
+- Conversational, confident, never pushy. Ask questions. Listen. Recommend, don't pitch.
+- Keep responses under 120 words. Be direct.
+- Never make up features or prices not listed above.`;
+
+/**
+ * SUPPORT MODE — for authenticated users who need help
+ */
 const SUPPORT_SYSTEM_PROMPT = `You are a friendly, knowledgeable support agent for Growth Engine — an AI-powered social media growth platform. Your job is to help users understand the product, troubleshoot issues, and make the most of their subscription.
 
 ## Product Overview
@@ -889,8 +928,8 @@ Growth Engine automates social media growth by:
 
 ## Tone Guidelines
 - Be concise, warm, and helpful. Use plain language.
-- If you don’t know the answer, say so honestly and suggest contacting support at support@growthengine.io.
-- Never make up features or pricing that aren’t listed above.
+- If you don't know the answer, say so honestly and suggest contacting support at support@growthengine.io.
+- Never make up features or pricing that aren't listed above.
 - Keep responses under 150 words unless the user asks for a detailed explanation.`;
 
 const supportRouter = router({
@@ -920,9 +959,13 @@ const supportRouter = router({
         content: input.message,
       });
 
+      // Choose prompt based on auth status: sales for visitors, support for users
+      const isAuthenticated = Boolean(userId);
+      const systemPrompt = isAuthenticated ? SUPPORT_SYSTEM_PROMPT : SALES_SYSTEM_PROMPT;
+
       // Build message history for LLM
       const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
-        { role: "system", content: SUPPORT_SYSTEM_PROMPT },
+        { role: "system", content: systemPrompt },
         ...input.history.map(h => ({ role: h.role as "user" | "assistant", content: h.content })),
         { role: "user", content: input.message },
       ];
@@ -1015,6 +1058,9 @@ export const appRouter = router({
   support: supportRouter,
   admin: adminRouter,
   instagramMcp: instagramMcpRouter,
+  onboarding: onboardingRouter,
+  campaignTemplates: campaignTemplatesRouter,
+  referrals: referralsRouter,
 });
 
 export type AppRouter = typeof appRouter;

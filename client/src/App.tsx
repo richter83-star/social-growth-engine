@@ -1,7 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import DashboardLayout from "./components/DashboardLayout";
@@ -16,9 +16,46 @@ import Schedules from "./pages/Schedules";
 import Billing from "./pages/Billing";
 import Team from "./pages/Team";
 import Help from "@/pages/Help";
+import Referrals from "@/pages/Referrals";
 import { SupportChat } from "./components/SupportChat";
 import BillingSuccess from "./pages/BillingSuccess";
 import AdminDashboard from "./pages/AdminDashboard";
+import OnboardingWizard from "./components/OnboardingWizard";
+import { trpc } from "@/lib/trpc";
+import { useAuth } from "./_core/hooks/useAuth";
+import { useState, useEffect } from "react";
+
+// Onboarding gate — shows wizard on first login for authenticated users
+function OnboardingGate() {
+  const { user } = useAuth();
+  const [showWizard, setShowWizard] = useState(false);
+  const [, navigate] = useLocation();
+
+  const { data: onboardingStatus } = trpc.onboarding.getStatus.useQuery(undefined, {
+    enabled: !!user,
+    staleTime: Infinity, // only fetch once per session
+  });
+
+  useEffect(() => {
+    if (onboardingStatus && !onboardingStatus.completed) {
+      setShowWizard(true);
+    }
+  }, [onboardingStatus]);
+
+  const handleComplete = () => {
+    setShowWizard(false);
+    navigate("/dashboard");
+  };
+
+  if (!user) return null;
+
+  return (
+    <OnboardingWizard
+      open={showWizard}
+      onComplete={handleComplete}
+    />
+  );
+}
 
 // All authenticated dashboard routes wrapped in DashboardLayout
 function DashboardRouter() {
@@ -36,6 +73,7 @@ function DashboardRouter() {
         <Route path="/billing/success" component={BillingSuccess} />
         <Route path="/team" component={Team} />
         <Route path="/help" component={Help} />
+        <Route path="/referrals" component={Referrals} />
         <Route component={NotFound} />
       </Switch>
     </DashboardLayout>
@@ -62,6 +100,7 @@ function App() {
           <Toaster theme="dark" position="top-right" />
           <Router />
           <SupportChat />
+          <OnboardingGate />
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>
