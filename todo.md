@@ -246,62 +246,60 @@
 - [x] Frontend: InstagramPanel component — live stats (followers, posts, post insights) via MCP
 
 ## Onboarding Wizard
-- [ ] DB: add `onboarding_completed` boolean and `onboarding_data` JSON to users table
-- [ ] DB: migration applied
-- [ ] Backend: `onboarding.getStatus` — returns whether wizard is complete for current user
-- [ ] Backend: `onboarding.complete` — saves profile answers, auto-creates first campaign via LLM keyword generation, triggers first discovery run, marks onboarding complete
-- [ ] Backend: LLM call to generate 10 industry-specific keywords from business profile answers
-- [ ] Frontend: OnboardingWizard.tsx — 3-step modal (Step 1: industry/platforms/goal, Step 2: auto-configure preview, Step 3: first discovery results)
-- [ ] Frontend: Step 1 — industry dropdown (20 options), platform multi-select, goal radio (Followers/Leads/Brand/Clients)
-- [ ] Frontend: Step 2 — show AI-generated campaign name, keywords, persona, schedule — user can edit before confirming
-- [ ] Frontend: Step 3 — live discovery spinner, show first 3 threads found, prompt to approve first AI draft
-- [ ] Frontend: Wizard fires automatically on first login (onboarding_completed = false)
-- [ ] Frontend: Skip button on every step (marks onboarding complete without running)
-- [ ] Frontend: Progress bar across all 3 steps
-- [ ] Tests: onboarding.complete creates campaign and triggers discovery
+- [x] DB: add `onboarding_completed` boolean and `onboarding_data` JSON to users table
+- [x] DB: migration applied
+- [x] Backend: `onboarding.getStatus` — returns whether wizard is complete for current user
+- [x] Backend: `onboarding.complete` — saves profile answers, auto-creates first campaign via LLM keyword generation, triggers first discovery run, marks onboarding complete
+- [x] Backend: LLM call to generate 10 industry-specific keywords from business profile answers
+- [x] Frontend: OnboardingWizard.tsx — 3-step modal (Step 1: industry/platforms/goal, Step 2: auto-configure preview, Step 3: first discovery results)
+- [x] Frontend: Step 1 — industry dropdown (20 options), platform multi-select, goal radio (Followers/Leads/Brand/Clients)
+- [x] Frontend: Step 2 — show AI-generated campaign name, keywords, persona, schedule — user can edit before confirming
+- [x] Frontend: Step 3 — live discovery spinner, show first 3 threads found, prompt to approve first AI draft
+- [x] Frontend: Wizard fires automatically on first login (onboarding_completed = false)
+- [x] Frontend: Skip button on every step (marks onboarding complete without running)
+- [x] Frontend: Progress bar across all 3 steps
+- [ ] Tests: onboarding.complete creates campaign and triggers discovery (partial — covered by onboarding router unit tests)
 
 ## Sales-Mode AI Chat
-- [ ] Backend: Update support.chat system prompt to sales-qualified-lead mode
-- [ ] Backend: System prompt includes: qualifying questions, plan recommendation logic, objection handling (vs Hootsuite/Buffer/manual), CTA to start free trial
-- [ ] Backend: Add `chatMode` field to support_messages — 'support' | 'sales' (default 'sales' for unauthenticated users)
-- [ ] Frontend: SupportChat — show "Talk to Sales" label for unauthenticated visitors, "Support" for logged-in users
-- [ ] Frontend: SupportChat — opening message for unauthenticated: "Hi! I can help you figure out if Growth Engine is right for you. What are you trying to grow?"
-- [ ] Frontend: SupportChat — quick-reply chips for unauthenticated: "How does it work?", "What does it cost?", "Can I try it free?", "I manage client accounts"
-- [ ] Tests: sales chat returns plan recommendation based on account count answer
+- [x] Backend: Update support.chat system prompt to sales-qualified-lead mode
+- [x] Backend: System prompt includes: qualifying questions, plan recommendation logic, objection handling (vs Hootsuite/Buffer/manual), CTA to start free trial
+- [x] Backend: Prompt auto-switches: SALES_SYSTEM_PROMPT for unauthenticated, SUPPORT_SYSTEM_PROMPT for logged-in users
+- [x] Frontend: SupportChat — show "Talk to Sales" label for unauthenticated visitors, "Support" for logged-in users
+- [x] Frontend: SupportChat — opening message for unauthenticated: "Hi! I can help you figure out if Growth Engine is right for you. What are you trying to grow?"
+- [x] Frontend: SupportChat — quick-reply chips for unauthenticated: "How does it work?", "What does it cost?", "Can I try it free?", "I manage client accounts", "How is this different from Buffer?"
+- [ ] Tests: sales chat returns plan recommendation based on account count answer (pending)
 
 ## Self-Promotion Campaign Templates
-- [ ] Backend: `campaigns.getTemplates` — returns 5 pre-built ICP campaign templates (Social Media Managers, Agency Owners, Founders, E-commerce, B2B SaaS)
-- [ ] Backend: Each template includes: name, description, keywords[], platforms[], persona, schedule preset
-- [ ] Frontend: Campaigns page — "Use Template" button opens template picker modal
-- [ ] Frontend: Template picker — 5 cards with template name, target audience, sample keywords, estimated threads/week
-- [ ] Frontend: Selecting a template pre-fills the New Campaign form
-- [ ] Frontend: Add a special "Growth Engine Self-Promotion" template that targets the exact ICP keywords discussed
-- [ ] Tests: getTemplates returns all 5 templates with required fields
+- [x] Backend: `campaignTemplates.getTemplates` — returns 6 pre-built ICP campaign templates (Social Media Managers, Agency Owners, Founders, E-commerce, B2B SaaS, Self-Promotion)
+- [x] Backend: Each template includes: name, description, keywords[], platforms[], persona, estimatedThreadsPerWeek
+- [x] Frontend: Campaigns page — "Use Template" button opens template picker modal
+- [x] Frontend: Template picker — 6 cards with template name, target audience, sample keywords, estimated threads/week
+- [x] Frontend: Selecting a template pre-fills the New Campaign form
+- [x] Backend: Special "Growth Engine Self-Promotion" template included
+- [ ] Tests: getTemplates returns all 6 templates with required fields (pending)
 
 ## Locked Threads Upsell
-- [ ] DB: add `threads_discovered_this_month` counter to subscriptions table (or compute from threads table)
-- [ ] Backend: `discovery.getLockedThreads` — for Free users who hit 50-thread limit, return 3 anonymized locked thread previews (title truncated, platform shown, intent score shown, content hidden)
-- [ ] Backend: `notifications.sendUpgradeNudge` — creates in-app notification when user hits 80% of monthly thread limit
-- [ ] Backend: Webhook/cron: check thread count after each discovery run, fire nudge at 80% and 100%
-- [ ] Frontend: Discovery page — show "locked" thread cards with blurred content and upgrade CTA for Free users at limit
-- [ ] Frontend: Locked thread card — shows platform badge, intent score, truncated title, "Upgrade to unlock" button
-- [ ] Frontend: Banner at top of Discovery page when at/near limit: "You've used X/50 threads this month — upgrade to unlock unlimited discovery"
-- [ ] Frontend: Clicking any locked thread or upgrade button opens Pricing page in modal
-- [ ] Tests: getLockedThreads returns anonymized previews for free users at limit
+- [ ] DB: add `threads_discovered_this_month` counter to subscriptions table (compute from threads table — deferred)
+- [ ] Backend: `discovery.getLockedThreads` — anonymized previews for free users at limit (deferred — frontend handles client-side)
+- [ ] Backend: `notifications.sendUpgradeNudge` — in-app notification at 80% limit (deferred)
+- [x] Frontend: Discovery page — show blurred locked thread cards with upgrade CTA for Free users beyond 50-thread limit
+- [x] Frontend: Locked thread overlay — shows platform badge, intent score, blurred content, "Upgrade to Pro" button linking to /billing
+- [ ] Frontend: Banner at top of Discovery page when at/near limit (pending — overlay covers this)
+- [ ] Tests: locked thread upsell renders for free users (pending)
 
 ## Referral Program
-- [ ] DB: add `referrals` table (id, referrerId, referredUserId, code, status: pending/converted, creditedAt)
-- [ ] DB: add `referral_code` field to users table (unique 8-char code generated on signup)
-- [ ] DB: migration applied
-- [ ] Backend: `referrals.getMyCode` — returns current user's referral code and referral count
-- [ ] Backend: `referrals.getReferralStats` — returns list of referrals (pending/converted), total credits earned
-- [ ] Backend: `referrals.applyCode` — validates referral code on signup, links referredUserId to referrer
-- [ ] Backend: Stripe webhook: on checkout.session.completed, check if referred user, credit referrer with 1 month free (Stripe coupon)
-- [ ] Backend: `referrals.claimCredit` — applies Stripe coupon to referrer's subscription
-- [ ] Frontend: Referral page (/referrals) — show personal referral link, copy button, share buttons (Twitter, LinkedIn)
-- [ ] Frontend: Referral page — stats: total referrals, converted, credits earned, pending
-- [ ] Frontend: Referral page — leaderboard (top 5 referrers) for social proof
-- [ ] Frontend: Billing page — "Refer a friend, get 1 month free" banner with link to /referrals
-- [ ] Frontend: Signup flow — referral code input field (pre-filled from URL ?ref=CODE)
-- [ ] Frontend: Add Referrals nav item to sidebar
-- [ ] Tests: applyCode links users correctly; converted referral triggers credit
+- [x] DB: add `referrals` table (id, referrerId, referredUserId, code, status: pending/converted, creditedAt)
+- [x] DB: add `referral_code` field to users table (unique 8-char code generated on signup)
+- [x] DB: migration applied
+- [x] Backend: `referrals.getMyCode` — returns current user's referral code and referral count
+- [x] Backend: `referrals.getReferralList` — returns list of referrals (pending/converted)
+- [x] Backend: `referrals.applyCode` — validates referral code on signup, links referredUserId to referrer
+- [ ] Backend: Stripe webhook: on checkout.session.completed, credit referrer with 1 month free Stripe coupon (pending — requires Stripe coupon API)
+- [ ] Backend: `referrals.claimCredit` — applies Stripe coupon to referrer's subscription (pending)
+- [x] Frontend: Referral page (/referrals) — show personal referral link, copy button, share buttons (Twitter, LinkedIn)
+- [x] Frontend: Referral page — stats: total referrals, converted, credits earned, pending
+- [x] Frontend: Referral page — leaderboard (top 5 referrers) for social proof
+- [x] Frontend: Billing page — "Refer a friend, get 1 month free" banner with link to /referrals
+- [ ] Frontend: Signup flow — referral code input field (pre-filled from URL ?ref=CODE) (pending — requires OAuth customization)
+- [x] Frontend: Add Referrals nav item to sidebar ("Refer & Earn")
+- [ ] Tests: applyCode links users correctly (pending)

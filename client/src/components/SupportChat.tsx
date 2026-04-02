@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { MessageCircle, X, Send, Bot, User, Loader2, ChevronDown } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 // ── Session ID (persisted across navigations) ─────────────────────────────────
 function getSessionId(): string {
@@ -21,7 +22,7 @@ type ChatMessage = {
   pending?: boolean;
 };
 
-const QUICK_REPLIES = [
+const SUPPORT_QUICK_REPLIES = [
   "How does Discovery work?",
   "What's included in the Pro plan?",
   "Can I edit AI comments?",
@@ -29,8 +30,21 @@ const QUICK_REPLIES = [
   "How do I cancel my subscription?",
 ];
 
+const SALES_QUICK_REPLIES = [
+  "How does it work?",
+  "What does it cost?",
+  "Can I try it free?",
+  "I manage client accounts",
+  "How is this different from Buffer?",
+];
+
+const SALES_WELCOME = "Hi! 👋 I can help you figure out if Growth Engine is right for you. What are you trying to grow?";
+const SUPPORT_WELCOME = "Hi there! 👋 I'm the Growth Engine support assistant. I can help you with questions about features, pricing, or getting started. What can I help you with today?";
+
 // ── Main Component ────────────────────────────────────────────────────────────
 export function SupportChat() {
+  const { user } = useAuth();
+  const isSalesMode = !user;
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -58,10 +72,10 @@ export function SupportChat() {
     if (open && hasLoaded && messages.length === 0) {
       setMessages([{
         role: "assistant",
-        content: "Hi there! 👋 I'm the Growth Engine support assistant. I can help you with questions about features, pricing, or getting started. What can I help you with today?",
+        content: isSalesMode ? SALES_WELCOME : SUPPORT_WELCOME,
       }]);
     }
-  }, [open, hasLoaded, messages.length]);
+  }, [open, hasLoaded, messages.length, isSalesMode]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -164,7 +178,7 @@ export function SupportChat() {
             <Bot className="w-4 h-4 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-white text-sm font-semibold">Growth Engine Support</div>
+            <div className="text-white text-sm font-semibold">{isSalesMode ? "Talk to Sales" : "Growth Engine Support"}</div>
             <div className="flex items-center gap-1.5">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span className="text-white/50 text-xs">AI assistant · typically replies instantly</span>
@@ -227,7 +241,7 @@ export function SupportChat() {
           {/* Quick replies — show only after welcome message and no user messages yet */}
           {messages.length === 1 && messages[0]?.role === "assistant" && (
             <div className="flex flex-wrap gap-1.5 pt-1">
-              {QUICK_REPLIES.map(q => (
+              {(isSalesMode ? SALES_QUICK_REPLIES : SUPPORT_QUICK_REPLIES).map(q => (
                 <button
                   key={q}
                   onClick={() => sendMessage(q)}

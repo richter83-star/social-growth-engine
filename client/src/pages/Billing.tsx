@@ -207,6 +207,24 @@ export default function Billing() {
           </p>
         </div>
 
+        {/* Referral banner */}
+        <div className="max-w-2xl mx-auto">
+          <a href="/referrals" className="block p-4 rounded-xl border border-violet-500/30 bg-violet-500/5 hover:bg-violet-500/10 transition-colors group">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-violet-500/20 flex items-center justify-center flex-shrink-0">
+                  <span className="text-lg">🎁</span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Refer a friend, get 1 month free</p>
+                  <p className="text-xs text-muted-foreground">Share your referral link — earn a free month for every paying customer you bring in</p>
+                </div>
+              </div>
+              <span className="text-xs text-violet-400 font-medium group-hover:text-violet-300 transition-colors whitespace-nowrap">Get your link →</span>
+            </div>
+          </a>
+        </div>
+
         {/* Current plan banner */}
         {currentPlan !== "free" && (
           <Card className={`max-w-2xl mx-auto ${isCanceling ? "bg-destructive/5 border-destructive/30" : "bg-primary/5 border-primary/20"}`}>

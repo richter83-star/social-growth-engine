@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Megaphone, Plus, Play, Pause, Trash2, Target, X, CheckCircle2, Crown } from "lucide-react";
+import { Megaphone, Plus, Play, Pause, Trash2, Target, X, CheckCircle2, Crown, LayoutTemplate, ChevronRight } from "lucide-react";
 import { useLocation } from "wouter";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -70,7 +70,25 @@ export default function Campaigns() {
   });
 
   const [open, setOpen] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
   const [keywordInput, setKeywordInput] = useState("");
+
+  const { data: templates } = trpc.campaignTemplates.getTemplates.useQuery();
+
+  function applyTemplate(t: NonNullable<typeof templates>[number]) {
+    setForm({
+      name: t.name,
+      description: t.description,
+      keywords: t.keywords,
+      platforms: t.platforms,
+      persona: t.persona,
+      playbook: "direct_negotiator",
+      targetEngagements: 50,
+    });
+    setKeywordInput("");
+    setTemplateOpen(false);
+    setOpen(true);
+  }
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -113,10 +131,59 @@ export default function Campaigns() {
           </h1>
           <p className="text-muted-foreground text-sm mt-1">Configure and manage your autonomous growth campaigns</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2"><Plus className="h-4 w-4" />New Campaign</Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2">
+          {/* Template Picker Modal */}
+          <Dialog open={templateOpen} onOpenChange={setTemplateOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="gap-2 border-primary/30 text-primary hover:bg-primary/10">
+                <LayoutTemplate className="h-4 w-4" />Use Template
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-card border-border max-w-2xl max-h-[85vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="text-foreground">Campaign Templates</DialogTitle>
+                <p className="text-sm text-muted-foreground">Choose a pre-built template to get started instantly</p>
+              </DialogHeader>
+              <div className="grid gap-3 pt-2">
+                {(templates ?? []).map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => applyTemplate(t)}
+                    className="text-left p-4 rounded-xl border border-border hover:border-primary/40 hover:bg-primary/5 transition-all group"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-semibold text-foreground">{t.name}</span>
+                          {t.id === "self-promotion" && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-400 border border-violet-500/30">Recommended</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-2">{t.description}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {t.keywords.slice(0, 4).map(k => (
+                            <span key={k} className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{k}</span>
+                          ))}
+                          {t.keywords.length > 4 && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">+{t.keywords.length - 4} more</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                        <span className="text-xs text-muted-foreground">~{t.estimatedThreadsPerWeek} threads/wk</span>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2"><Plus className="h-4 w-4" />New Campaign</Button>
+            </DialogTrigger>
           <DialogContent className="bg-card border-border max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="text-foreground">Create Campaign</DialogTitle>
@@ -184,7 +251,8 @@ export default function Campaigns() {
               </Button>
             </div>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       {isLoading ? (
