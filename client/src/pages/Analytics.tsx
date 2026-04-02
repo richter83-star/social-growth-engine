@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -75,7 +76,7 @@ function CustomTooltip({
 
 // ─── Follower Growth Chart ────────────────────────────────────────────────────
 
-function FollowerGrowthChart() {
+function FollowerGrowthChart({ onSyncNow, isSyncing }: { onSyncNow: () => void; isSyncing: boolean }) {
   const [days, setDays] = useState(30);
   const { data: rawData, isLoading, refetch, isFetching } = trpc.analytics.getFollowerGrowth.useQuery(
     { days },
@@ -204,10 +205,20 @@ function FollowerGrowthChart() {
           <div className="flex flex-col items-center justify-center h-[280px] text-center">
             <TrendingUp className="h-10 w-10 text-muted-foreground/20 mb-3" />
             <p className="text-sm font-medium text-muted-foreground mb-1">No follower data yet</p>
-            <p className="text-xs text-muted-foreground/70 max-w-xs">
+            <p className="text-xs text-muted-foreground/70 max-w-xs mb-4">
               Follower snapshots are recorded automatically each night when the daily sync runs.
-              You can also trigger a manual sync from the Admin → Sync Jobs tab.
+              Use the <strong className="text-foreground">Sync Now</strong> button above to populate your first data points.
             </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onSyncNow}
+              disabled={isSyncing}
+              className="gap-2"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`} />
+              {isSyncing ? "Syncing…" : "Sync Now"}
+            </Button>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={280}>
@@ -267,6 +278,26 @@ function FollowerGrowthChart() {
 // ─── Main Analytics Page ──────────────────────────────────────────────────────
 
 export default function Analytics() {
+  const utils = trpc.useUtils();
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+
+  const syncMutation = trpc.accounts.syncMyAccounts.useMutation({
+    onSuccess: (data) => {
+      setLastSyncedAt(new Date().toLocaleTimeString());
+      utils.analytics.getFollowerGrowth.invalidate();
+      utils.analytics.metrics.invalidate();
+      const msg = data.synced > 0
+        ? `Synced ${data.synced} account${data.synced !== 1 ? "s" : ""}${data.failed > 0 ? `, ${data.failed} failed` : ""}.`
+        : data.skipped > 0
+        ? `No accounts with live data to sync (${data.skipped} skipped).`
+        : "No active accounts found.";
+      toast.success("Sync complete", { description: msg });
+    },
+    onError: (err) => {
+      toast.error("Sync failed", { description: err.message });
+    },
+  });
+
   const { data: metrics, isLoading: metricsLoading } = trpc.analytics.metrics.useQuery({ days: 30 });
   const { data: roi } = trpc.analytics.roi.useQuery({ days: 30 });
   const { data: summary } = trpc.analytics.summary.useQuery();
@@ -283,14 +314,29 @@ export default function Analytics() {
 
   return (
     <div className="space-y-6 max-w-7xl">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-          <BarChart3 className="h-6 w-6 text-primary" />
-          Analytics & Performance
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Track your growth, engagement performance, and AI learning insights
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <BarChart3 className="h-6 w-6 text-primary" />
+            Analytics & Performance
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Track your growth, engagement performance, and AI learning insights
+          </p>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <Button
+            onClick={() => syncMutation.mutate()}
+            disabled={syncMutation.isPending}
+            className="gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${syncMutation.isPending ? "animate-spin" : ""}`} />
+            {syncMutation.isPending ? "Syncing…" : "Sync Now"}
+          </Button>
+          {lastSyncedAt && (
+            <p className="text-xs text-muted-foreground">Last synced at {lastSyncedAt}</p>
+          )}
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -320,7 +366,7 @@ export default function Analytics() {
       </div>
 
       {/* Follower Growth Line Chart (per-account, time-range selector) */}
-      <FollowerGrowthChart />
+      <FollowerGrowthChart onSyncNow={() => syncMutation.mutate()} isSyncing={syncMutation.isPending} />
 
       {metricsLoading ? (
         <div className="flex items-center justify-center py-16">

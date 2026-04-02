@@ -313,6 +313,92 @@ const accountsRouter = router({
 
       return results;
     }),
+
+  /**
+   * Sync all active accounts for the current user and record daily snapshots.
+   * Designed for the Analytics page "Sync Now" button.
+   */
+  syncMyAccounts: protectedProcedure.mutation(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+
+    const { performanceMetrics } = await import("../drizzle/schema");
+    const { eq: eqOp, and: andOp } = await import("drizzle-orm");
+
+    const allAccounts = await getAccountsByUser(ctx.user.id);
+    const active = allAccounts.filter((a) => a.isActive);
+
+    let synced = 0;
+    let failed = 0;
+    let skipped = 0;
+    const today = new Date().toISOString().slice(0, 10);
+
+    for (const account of active) {
+      const handle = account.handle.replace(/^@/, "");
+      if (!handle) { skipped++; continue; }
+
+      try {
+        let followers: number | undefined;
+
+        if (account.platform === "twitter") {
+          const oauthToken = await getOAuthToken(ctx.user.id, account.id);
+          if (oauthToken) {
+            let accessToken = oauthToken.accessToken;
+            if (oauthToken.expiresAt && oauthToken.expiresAt < new Date() && oauthToken.refreshToken) {
+              try {
+                const refreshed = await refreshTwitterToken(oauthToken.refreshToken);
+                accessToken = refreshed.accessToken;
+              } catch { /* fall through */ }
+            }
+            const twitterMetrics = await fetchTwitterMetricsWithToken(accessToken, account.handle);
+            if (twitterMetrics) {
+              await updateAccount(account.id, ctx.user.id, { followers: twitterMetrics.followers, following: twitterMetrics.following, lastSynced: new Date() });
+              followers = twitterMetrics.followers;
+            }
+          }
+          if (followers === undefined) {
+            const raw = await callDataApi("Twitter/get_user_profile_by_username", { query: { username: handle } }) as Record<string, unknown>;
+            const userData = (raw as any)?.result?.data?.user?.result;
+            const legacy = userData?.legacy ?? {};
+            const fc = typeof legacy.followers_count === "number" ? legacy.followers_count : undefined;
+            if (fc !== undefined) {
+              await updateAccount(account.id, ctx.user.id, { followers: fc, lastSynced: new Date() });
+              followers = fc;
+            }
+          }
+
+        } else if (account.platform === "instagram") {
+          const oauthToken = await getOAuthToken(ctx.user.id, account.id);
+          if (oauthToken) {
+            const igMetrics = await fetchInstagramMetricsWithToken(oauthToken.accessToken);
+            if (igMetrics) {
+              await updateAccount(account.id, ctx.user.id, { followers: igMetrics.followers, lastSynced: new Date() });
+              followers = igMetrics.followers;
+            }
+          }
+        } else {
+          // LinkedIn / TikTok / Reddit — mark as skipped (no follower count API)
+          skipped++;
+          continue;
+        }
+
+        if (followers !== undefined) {
+          const prevFollowers = account.followers ?? 0;
+          await db.insert(performanceMetrics)
+            .values({ userId: ctx.user.id, accountId: account.id, date: today, followers, followerDelta: followers - prevFollowers })
+            .onDuplicateKeyUpdate({ set: { followers, followerDelta: followers - prevFollowers } })
+            .catch(() => {}); // non-fatal
+          synced++;
+        } else {
+          failed++;
+        }
+      } catch {
+        failed++;
+      }
+    }
+
+    return { synced, failed, skipped, total: active.length, syncedAt: new Date().toISOString() };
+  }),
 });
 
 // --- Campaigns Router ---------------------------------------------------------

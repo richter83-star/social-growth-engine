@@ -345,3 +345,13 @@
 - [x] Frontend: Refresh button to re-fetch data without page reload
 - [x] Tests: 18 new tests in follower.growth.test.ts covering account list, pivot, net-change, time-range, and response shape
 - [x] Tests: 150 total tests passing across 14 test files
+
+## Sync Now Button (Analytics Page)
+- [x] Backend: `accounts.syncMyAccounts` tRPC mutation — syncs all active accounts for the current user, upserts performance_metrics snapshots, returns { synced, failed, skipped }
+- [x] Frontend: Analytics page header — "Sync Now" button with RefreshCw icon and loading spinner
+- [x] Frontend: On success, auto-invalidate getFollowerGrowth and metrics queries so chart refreshes
+- [x] Frontend: Sonner toast on success ("Synced N accounts") and on error
+- [x] Frontend: Show last-synced timestamp below the button after first sync
+- [x] Frontend: Secondary "Sync Now" button in chart empty state for discoverability
+- [x] Tests: 22 new tests in sync.manual.test.ts covering summary messages, active filtering, platform classification, snapshot values, and response shape
+- [x] Tests: 172 total tests passing across 15 test files
