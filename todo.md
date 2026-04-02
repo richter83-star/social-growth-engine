@@ -316,3 +316,18 @@
 - [x] Frontend: Referrals page — referral list shows "Credited" badge for credited referrals
 - [x] Tests: 8 new tests in referralCredit.test.ts covering ensureReferralCoupon, processReferralOnCheckout, applyReferralCredit, getPendingCredits
 - [x] Tests: 116 total tests passing across 12 test files
+
+## Daily Auto-Sync Scheduler
+- [x] Backend: `server/jobs/dailyAccountSync.ts` — nightly job that fetches all active social accounts and calls syncStats for each
+- [x] Backend: Cron schedule: 2 AM UTC daily (node-cron `0 2 * * *`)
+- [x] Backend: Per-account error isolation — one failing account does not abort the rest
+- [x] Backend: Job result summary: total accounts, succeeded, failed, skipped (no username)
+- [x] Backend: Log job start/end/summary to console with timestamps
+- [x] Backend: Store last sync job result in a `sync_job_logs` table (jobType, startedAt, completedAt, totalAccounts, succeeded, failed, summary JSON)
+- [x] DB: `sync_job_logs` table migration applied
+- [x] Backend: `admin.getSyncJobLogs` tRPC query — returns last 30 sync job log entries for admin
+- [x] Backend: `admin.triggerSyncNow` tRPC mutation — manually triggers the daily sync job from admin panel
+- [x] Backend: Wire daily sync job into scheduler startup (alongside existing campaign cron jobs)
+- [x] Frontend: Admin Dashboard — "Sync Jobs" tab with schedule info, execution history table, Run Now button
+- [x] Tests: 16 new tests in sync.scheduler.test.ts covering status derivation, log shape, sync logic, and input validation
+- [x] Tests: 132 total tests passing across 13 test files

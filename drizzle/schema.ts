@@ -293,3 +293,20 @@ export const referrals = mysqlTable("referrals", {
 
 export type Referral = typeof referrals.$inferSelect;
 export type InsertReferral = typeof referrals.$inferInsert;
+
+// Sync job logs — records each nightly account sync run
+export const syncJobLogs = mysqlTable("sync_job_logs", {
+  id: int("id").autoincrement().primaryKey(),
+  jobType: varchar("jobType", { length: 64 }).notNull().default("daily_account_sync"),
+  startedAt: timestamp("startedAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+  totalAccounts: int("totalAccounts").notNull().default(0),
+  succeeded: int("succeeded").notNull().default(0),
+  failed: int("failed").notNull().default(0),
+  skipped: int("skipped").notNull().default(0),
+  durationMs: int("durationMs"),
+  summary: json("summary").$type<Array<{id: number; handle: string; platform: string; status: string; error?: string}>>(),
+  error: text("error"),
+});
+export type SyncJobLog = typeof syncJobLogs.$inferSelect;
+export type InsertSyncJobLog = typeof syncJobLogs.$inferInsert;

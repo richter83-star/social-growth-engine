@@ -13,6 +13,7 @@ import {
 import { discoverThreads, generateEngagement } from "./engagementEngine";
 import { createThread, updateCampaign, createEngagement, getThreadsByCampaign } from "./db";
 import { notifyOwner } from "./_core/notification";
+import { runDailyAccountSync } from "./jobs/dailyAccountSync";
 
 // Map of scheduleId → cron task, so we can start/stop individual schedules
 const activeTasks = new Map<number, ReturnType<typeof cron.schedule>>();
@@ -180,6 +181,14 @@ export async function initScheduler() {
   } catch (err) {
     console.error("[Scheduler] Failed to initialize:", err);
   }
+
+  // Register the nightly account sync job — runs every day at 2:00 AM UTC
+  // Cron: 0 0 2 * * * (sec min hour day month weekday)
+  cron.schedule("0 0 2 * * *", async () => {
+    console.log("[Scheduler] Triggering nightly account sync job");
+    await runDailyAccountSync();
+  }, { timezone: "UTC" });
+  console.log("[Scheduler] Registered nightly account sync at 02:00 UTC");
 }
 
 /**

@@ -7,7 +7,8 @@ import {
   Users, DollarSign, TrendingUp, Activity, MessageSquare,
   Server, Search, ChevronDown, ChevronUp, RefreshCw,
   Crown, Shield, AlertTriangle, CheckCircle, Clock,
-  BarChart2, PieChart as PieChartIcon, Zap, Eye, XCircle
+  BarChart2, PieChart as PieChartIcon, Zap, Eye, XCircle,
+  Calendar, Play
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -692,6 +693,165 @@ function UserDetailDrawer({ userId, onClose }: { userId: number; onClose: () => 
   );
 }
 
+// ─── Sync Jobs Tab ───────────────────────────────────────────────────────────
+function SyncJobsTab() {
+  const { data, isLoading, refetch } = trpc.admin.getSyncJobLogs.useQuery({ limit: 20 });
+  const triggerSync = trpc.admin.triggerSyncNow.useMutation({
+    onSuccess: (result) => {
+      toast.success(result.message);
+      setTimeout(() => refetch(), 3000);
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  // Derive status from counts since schema uses succeeded/failed/skipped instead of a status enum
+  const deriveStatus = (log: { succeeded: number; failed: number; totalAccounts: number; completedAt: Date | null }) => {
+    if (!log.completedAt) return "running";
+    if (log.failed === 0) return "success";
+    if (log.succeeded > 0) return "partial";
+    return "failed";
+  };
+
+  const statusColor = (status: string) => {
+    if (status === "success") return "text-emerald-400";
+    if (status === "partial") return "text-amber-400";
+    if (status === "failed") return "text-red-400";
+    if (status === "running") return "text-cyan-400";
+    return "text-muted-foreground";
+  };
+
+  const statusIcon = (status: string) => {
+    if (status === "success") return <CheckCircle className="w-4 h-4 text-emerald-400" />;
+    if (status === "partial") return <AlertTriangle className="w-4 h-4 text-amber-400" />;
+    if (status === "failed") return <XCircle className="w-4 h-4 text-red-400" />;
+    if (status === "running") return <RefreshCw className="w-4 h-4 text-cyan-400 animate-spin" />;
+    return <Clock className="w-4 h-4 text-muted-foreground" />;
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-foreground">Sync Jobs</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">Daily account stats sync — runs automatically at 2 AM UTC</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2">
+            <RefreshCw className="w-3.5 h-3.5" /> Refresh
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => triggerSync.mutate()}
+            disabled={triggerSync.isPending}
+            className="gap-2 bg-violet-600 hover:bg-violet-700 text-white"
+          >
+            <Play className="w-3.5 h-3.5" />
+            {triggerSync.isPending ? "Starting..." : "Run Now"}
+          </Button>
+        </div>
+      </div>
+
+      {/* Schedule Info */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="bg-violet-500/10 border-violet-500/30">
+          <CardContent className="p-4 flex items-center gap-3">
+            <Clock className="w-5 h-5 text-violet-400" />
+            <div>
+              <p className="text-sm font-semibold text-foreground">Schedule</p>
+              <p className="text-xs text-violet-400">Daily at 2:00 AM UTC</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-card/50 border-border/50">
+          <CardContent className="p-4 flex items-center gap-3">
+            <Activity className="w-5 h-5 text-cyan-400" />
+            <div>
+              <p className="text-sm font-semibold text-foreground">Total Runs</p>
+              <p className="text-xs text-cyan-400">{data?.length ?? 0} logged</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-card/50 border-border/50">
+          <CardContent className="p-4 flex items-center gap-3">
+            <CheckCircle className="w-5 h-5 text-emerald-400" />
+            <div>
+              <p className="text-sm font-semibold text-foreground">Last Status</p>
+              <p className={`text-xs capitalize ${data?.[0] ? statusColor(deriveStatus(data[0])) : "text-muted-foreground"}`}>
+                {data?.[0] ? deriveStatus(data[0]) : "No runs yet"}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Logs Table */}
+      <Card className="bg-card/50 border-border/50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <Server className="w-4 h-4" /> Execution History (last 20)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-32 text-muted-foreground">Loading logs...</div>
+          ) : !data || data.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-32 text-muted-foreground gap-2">
+              <Clock className="w-8 h-8 opacity-30" />
+              <p className="text-sm">No sync runs yet — click "Run Now" to trigger the first one</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border/30">
+                    <th className="text-left px-4 py-3 text-muted-foreground font-medium">Started</th>
+                    <th className="text-left px-4 py-3 text-muted-foreground font-medium">Status</th>
+                    <th className="text-left px-4 py-3 text-muted-foreground font-medium hidden md:table-cell">Accounts Synced</th>
+                    <th className="text-left px-4 py-3 text-muted-foreground font-medium hidden md:table-cell">Errors</th>
+                    <th className="text-left px-4 py-3 text-muted-foreground font-medium hidden lg:table-cell">Duration</th>
+                    <th className="text-left px-4 py-3 text-muted-foreground font-medium hidden lg:table-cell">Message</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.map((log) => (
+                    <tr key={log.id} className="border-b border-border/20 hover:bg-muted/10 transition-colors">
+                      <td className="px-4 py-3 text-foreground text-xs">
+                        {new Date(log.startedAt).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5">
+                          {statusIcon(deriveStatus(log))}
+                          <span className={`text-xs font-medium capitalize ${statusColor(deriveStatus(log))}`}>
+                            {deriveStatus(log)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">
+                        {log.succeeded ?? 0} / {log.totalAccounts ?? 0}
+                      </td>
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        <span className={log.failed && log.failed > 0 ? "text-red-400" : "text-muted-foreground"}>
+                          {log.failed ?? 0}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground text-xs">
+                        {log.durationMs != null ? `${(log.durationMs / 1000).toFixed(1)}s` : "—"}
+                      </td>
+                      <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground text-xs max-w-xs truncate">
+                        {log.error ?? "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ─── Main Admin Dashboard ─────────────────────────────────────────────────────
 const TABS = [
   { id: "overview", label: "Overview", icon: BarChart2 },
@@ -699,6 +859,7 @@ const TABS = [
   { id: "revenue", label: "Revenue", icon: DollarSign },
   { id: "support", label: "Support", icon: MessageSquare },
   { id: "system", label: "System", icon: Server },
+  { id: "syncjobs", label: "Sync Jobs", icon: Calendar },
 ] as const;
 
 type TabId = typeof TABS[number]["id"];
@@ -781,6 +942,7 @@ export default function AdminDashboard() {
         {activeTab === "revenue" && <RevenueTab />}
         {activeTab === "support" && <SupportTab />}
         {activeTab === "system" && <SystemTab />}
+        {activeTab === "syncjobs" && <SyncJobsTab />}
       </div>
 
       {/* User Detail Drawer */}

@@ -44,6 +44,7 @@ import {
   saveChurnReason, getChurnReasonBreakdown,
 } from "./db";
 import { invokeLLM } from "./_core/llm";
+import { getDb } from "./db";
 import Stripe from "stripe";
 import { PLAN_LIMITS, STRIPE_PRICES } from "./products";
 
@@ -1014,6 +1015,23 @@ const adminRouter = router({
     }),
 
   getChurnReasons: adminProcedure.query(async () => getChurnReasonBreakdown()),
+
+  getSyncJobLogs: adminProcedure
+    .input(z.object({ limit: z.number().min(1).max(50).default(10) }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const { syncJobLogs } = await import("../drizzle/schema");
+      const { desc } = await import("drizzle-orm");
+      return db.select().from(syncJobLogs).orderBy(desc(syncJobLogs.startedAt)).limit(input.limit);
+    }),
+
+  triggerSyncNow: adminProcedure.mutation(async () => {
+    const { runDailyAccountSync } = await import("./jobs/dailyAccountSync");
+    // Fire-and-forget so HTTP response returns immediately
+    runDailyAccountSync().catch((err: unknown) => console.error("[Admin] Manual sync error:", err));
+    return { triggered: true, message: "Sync job started — check logs in a few minutes" };
+  }),
 });
 
 // --- Instagram MCP Router (owner's connected account) ----------------------
