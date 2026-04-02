@@ -20,7 +20,15 @@ import {
 } from "./engagementEngine";
 import { callDataApi } from "./_core/dataApi";
 import { notifyOwner } from "./_core/notification";
+import {
+  buildTwitterAuthUrl, buildLinkedInAuthUrl, buildInstagramAuthUrl,
+  createOAuthState, generatePKCE,
+  getOAuthToken, deleteOAuthToken, getOAuthStatusForAccounts,
+  fetchTwitterMetricsWithToken, fetchLinkedInProfileWithToken, fetchInstagramMetricsWithToken,
+  refreshTwitterToken,
+} from "./socialOAuth";
 import { registerSchedule, stopSchedule, triggerScheduleNow } from "./scheduler";
+import { getInstagramAccountInfo, getInstagramPosts, getInstagramPostInsights } from "./instagramMcp";
 import {
   getSchedulesByUser, createSchedule, updateSchedule as updateScheduleDb, deleteSchedule as deleteScheduleDb,
 } from "./db";
@@ -81,6 +89,69 @@ const accountsRouter = router({
     .input(z.object({ id: z.number() }))
     .mutation(({ ctx, input }) => deleteAccount(input.id, ctx.user.id)),
 
+  getOAuthStatus: protectedProcedure
+    .input(z.object({ accountIds: z.array(z.number()) }))
+    .query(async ({ ctx, input }) => {
+      return getOAuthStatusForAccounts(ctx.user.id, input.accountIds);
+    }),
+
+  getOAuthConnectUrl: protectedProcedure
+    .input(z.object({
+      accountId: z.number(),
+      platform: z.enum(["twitter", "linkedin", "instagram"]),
+      origin: z.string().url(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const accounts = await getAccountsByUser(ctx.user.id);
+      const account = accounts.find(a => a.id === input.accountId);
+      if (!account) throw new TRPCError({ code: "NOT_FOUND", message: "Account not found" });
+
+      if (input.platform === "twitter") {
+        const { verifier, challenge } = generatePKCE();
+        const state = createOAuthState({
+          verifier,
+          accountId: input.accountId,
+          userId: ctx.user.id,
+          platform: "twitter",
+          redirectOrigin: input.origin,
+        });
+        const redirectUri = `${input.origin}/api/oauth/twitter/callback`;
+        const url = buildTwitterAuthUrl({ state, codeChallenge: challenge, redirectUri });
+        return { url };
+      } else if (input.platform === "linkedin") {
+        const state = createOAuthState({
+          accountId: input.accountId,
+          userId: ctx.user.id,
+          platform: "linkedin",
+          redirectOrigin: input.origin,
+        });
+        const redirectUri = `${input.origin}/api/oauth/linkedin/callback`;
+        const url = buildLinkedInAuthUrl({ state, redirectUri });
+        return { url };
+      } else if (input.platform === "instagram") {
+        const state = createOAuthState({
+          accountId: input.accountId,
+          userId: ctx.user.id,
+          platform: "instagram",
+          redirectOrigin: input.origin,
+        });
+        const redirectUri = `${input.origin}/api/oauth/instagram/callback`;
+        const url = buildInstagramAuthUrl({ state, redirectUri });
+        return { url };
+      }
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Unsupported platform" });
+    }),
+
+  disconnectOAuth: protectedProcedure
+    .input(z.object({ accountId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const accounts = await getAccountsByUser(ctx.user.id);
+      const account = accounts.find(a => a.id === input.accountId);
+      if (!account) throw new TRPCError({ code: "NOT_FOUND", message: "Account not found" });
+      await deleteOAuthToken(ctx.user.id, input.accountId);
+      return { success: true };
+    }),
+
   syncStats: protectedProcedure
     .input(z.object({
       id: z.number(),        // account id to sync; 0 = sync all accounts for this user
@@ -109,6 +180,32 @@ const accountsRouter = router({
       for (const account of targets) {
         try {
           if (account.platform === "twitter") {
+            // Try OAuth token first for authenticated metrics
+            const oauthToken = await getOAuthToken(ctx.user.id, account.id);
+            if (oauthToken) {
+              // Check if token needs refresh
+              let accessToken = oauthToken.accessToken;
+              if (oauthToken.expiresAt && oauthToken.expiresAt < new Date() && oauthToken.refreshToken) {
+                try {
+                  const refreshed = await refreshTwitterToken(oauthToken.refreshToken);
+                  accessToken = refreshed.accessToken;
+                  // Save refreshed token
+                  await (await import("./socialOAuth")).saveOAuthToken(ctx.user.id, account.id, "twitter", {
+                    accessToken: refreshed.accessToken,
+                    refreshToken: refreshed.refreshToken,
+                    expiresAt: new Date(Date.now() + refreshed.expiresIn * 1000),
+                    scope: oauthToken.scope,
+                  });
+                } catch { /* fall through to public API */ }
+              }
+              const twitterMetrics = await fetchTwitterMetricsWithToken(accessToken, account.handle);
+              if (twitterMetrics) {
+                await updateAccount(account.id, ctx.user.id, { followers: twitterMetrics.followers, following: twitterMetrics.following, lastSynced: new Date() });
+                results.push({ id: account.id, platform: account.platform, handle: account.handle, status: "success", followers: twitterMetrics.followers, following: twitterMetrics.following });
+                continue;
+              }
+            }
+            // Fallback: public API via Manus hub
             const raw = await callDataApi("Twitter/get_user_profile_by_username", {
               query: { username: account.handle.replace(/^@/, "") },
             }) as Record<string, unknown>;
@@ -144,12 +241,24 @@ const accountsRouter = router({
             }
 
           } else if (account.platform === "linkedin") {
+            // Try OAuth token first for verified display name
+            const oauthToken = await getOAuthToken(ctx.user.id, account.id);
+            if (oauthToken) {
+              const profile = await fetchLinkedInProfileWithToken(oauthToken.accessToken);
+              if (profile) {
+                await updateAccount(account.id, ctx.user.id, {
+                  displayName: profile.displayName,
+                  lastSynced: new Date(),
+                });
+                results.push({ id: account.id, platform: account.platform, handle: account.handle, status: "success", displayName: profile.displayName, error: "Follower count not available via LinkedIn API" });
+                continue;
+              }
+            }
+            // Fallback: public API
             const raw = await callDataApi("LinkedIn/get_user_profile_by_username", {
               query: { username: account.handle.replace(/^@/, "") },
             }) as Record<string, unknown>;
 
-            // LinkedIn API does not expose follower counts publicly
-            // We can still pull the display name
             if (raw?.success === false) {
               results.push({ id: account.id, platform: account.platform, handle: account.handle, status: "error", error: (raw.message as string) ?? "Profile not accessible" });
               continue;
@@ -163,17 +272,26 @@ const accountsRouter = router({
               displayName: displayName ?? account.displayName ?? account.handle,
               lastSynced: new Date(),
             });
-            results.push({
-              id: account.id,
-              platform: account.platform,
-              handle: account.handle,
-              status: "success",
-              displayName,
-              error: "Follower count not available via LinkedIn API",
-            });
+            results.push({ id: account.id, platform: account.platform, handle: account.handle, status: "success", displayName, error: "Follower count not available via LinkedIn API" });
+
+          } else if (account.platform === "instagram") {
+            // Instagram requires OAuth — no public API available
+            const oauthToken = await getOAuthToken(ctx.user.id, account.id);
+            if (!oauthToken) {
+              await updateAccount(account.id, ctx.user.id, { lastSynced: new Date() });
+              results.push({ id: account.id, platform: account.platform, handle: account.handle, status: "not_supported", error: "Connect your Instagram account to sync metrics" });
+              continue;
+            }
+            const igMetrics = await fetchInstagramMetricsWithToken(oauthToken.accessToken);
+            if (!igMetrics) {
+              results.push({ id: account.id, platform: account.platform, handle: account.handle, status: "error", error: "Could not fetch Instagram metrics. Ensure account is a Professional (Business/Creator) account." });
+              continue;
+            }
+            await updateAccount(account.id, ctx.user.id, { followers: igMetrics.followers, lastSynced: new Date() });
+            results.push({ id: account.id, platform: account.platform, handle: account.handle, status: "success", followers: igMetrics.followers });
 
           } else {
-            // Instagram, TikTok, Reddit — no public API available in hub
+            // TikTok, Reddit — no API available
             await updateAccount(account.id, ctx.user.id, { lastSynced: new Date() });
             results.push({
               id: account.id,
@@ -855,6 +973,25 @@ const adminRouter = router({
   getChurnReasons: adminProcedure.query(async () => getChurnReasonBreakdown()),
 });
 
+// --- Instagram MCP Router (owner's connected account) ----------------------
+const instagramMcpRouter = router({
+  accountInfo: protectedProcedure.query(async () => {
+    return getInstagramAccountInfo();
+  }),
+
+  posts: protectedProcedure
+    .input(z.object({ limit: z.number().min(5).max(20).default(10) }))
+    .query(async ({ input }) => {
+      return getInstagramPosts(input.limit);
+    }),
+
+  postInsights: protectedProcedure
+    .input(z.object({ postId: z.string() }))
+    .query(async ({ input }) => {
+      return getInstagramPostInsights(input.postId);
+    }),
+});
+
 // --- App Router -------------------------------------------------------------
 export const appRouter = router({
   system: systemRouter,
@@ -877,6 +1014,7 @@ export const appRouter = router({
   team: teamRouter,
   support: supportRouter,
   admin: adminRouter,
+  instagramMcp: instagramMcpRouter,
 });
 
 export type AppRouter = typeof appRouter;

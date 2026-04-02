@@ -242,6 +242,24 @@ export const supportMessages = mysqlTable("support_messages", {
 export type SupportMessage = typeof supportMessages.$inferSelect;
 export type InsertSupportMessage = typeof supportMessages.$inferInsert;
 
+// OAuth tokens for connected social accounts
+export const oauthTokens = mysqlTable("oauth_tokens", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  accountId: int("accountId").notNull(),
+  platform: mysqlEnum("platform", ["twitter", "reddit", "linkedin", "instagram", "tiktok"]).notNull(),
+  accessToken: text("accessToken").notNull(),       // encrypted
+  refreshToken: text("refreshToken"),               // encrypted, nullable
+  tokenType: varchar("tokenType", { length: 32 }).default("Bearer").notNull(),
+  scope: text("scope"),
+  expiresAt: timestamp("expiresAt"),                // null = non-expiring
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type OAuthToken = typeof oauthTokens.$inferSelect;
+export type InsertOAuthToken = typeof oauthTokens.$inferInsert;
+
 // Cancellation churn reasons
 export const churnReasons = mysqlTable("churn_reasons", {
   id: int("id").autoincrement().primaryKey(),

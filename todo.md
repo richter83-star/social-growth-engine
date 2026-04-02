@@ -224,3 +224,23 @@
 - [x] Frontend: Show last synced timestamp below follower count on each card
 - [x] Frontend: Show per-account sync status: loading spinner, success checkmark, error badge
 - [x] Tests: syncStats mutation test — verify Twitter path calls API and updates DB
+
+## Social Platform OAuth Integration
+- [x] DB: Add oauth_tokens table (platform, userId, accountId, accessToken encrypted, refreshToken encrypted, expiresAt, scope, tokenType)
+- [x] DB: Migration SQL applied
+- [x] Backend: Twitter/X OAuth 2.0 PKCE flow — /api/oauth/twitter/callback route
+- [x] Backend: LinkedIn OAuth 3-legged flow — /api/oauth/linkedin/callback route
+- [x] Backend: Instagram/Meta OAuth flow — /api/oauth/instagram/callback route
+- [x] Backend: Token refresh helper for Twitter (refresh_token grant)
+- [x] Backend: Token refresh helper for Instagram (long-lived token exchange)
+- [x] Backend: accounts.syncStats updated to use stored OAuth tokens when available (Twitter organic metrics, Instagram insights)
+- [x] Backend: tRPC procedure accounts.getOAuthStatus — returns connected/disconnected per platform per account
+- [x] Backend: tRPC procedure accounts.disconnectOAuth — revokes and deletes stored token
+- [x] Frontend: Accounts page — "Connect" button per account card (opens OAuth popup/redirect)
+- [x] Frontend: Accounts page — show "Connected" badge with green dot when OAuth token exists
+- [x] Frontend: Accounts page — "Disconnect" option in account card menu
+- [x] Secrets: TWITTER_CLIENT_ID, TWITTER_CLIENT_SECRET, META_APP_ID, META_APP_SECRET, LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET (awaiting user input)
+- [x] Tests: socialOAuth and instagramMcp mocked in accounts.sync.test.ts
+- [x] Tests: syncStats uses OAuth token when available vs falls back to public API
+- [x] Backend: instagramMcp.ts — MCP connector integration for owner's Instagram account
+- [x] Frontend: InstagramPanel component — live stats (followers, posts, post insights) via MCP

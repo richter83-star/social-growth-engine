@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
+import InstagramPanel from "@/components/InstagramPanel";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
-import { Users, Plus, Trash2, RefreshCw, Twitter, Linkedin, CheckCircle2, AlertCircle, Clock } from "lucide-react";
+import {
+  Users, Plus, Trash2, RefreshCw, Twitter, Linkedin,
+  CheckCircle2, AlertCircle, Clock, Link2, Unlink, ShieldCheck,
+} from "lucide-react";
 
 type Platform = "twitter" | "reddit" | "linkedin" | "instagram" | "tiktok";
 
@@ -70,6 +74,9 @@ const PLATFORM_LABELS: Record<string, string> = {
   tiktok: "TikTok",
 };
 
+// Platforms that support OAuth connect
+const OAUTH_PLATFORMS = new Set(["twitter", "linkedin", "instagram"]);
+
 const PLATFORMS: Platform[] = ["twitter", "reddit", "linkedin", "instagram", "tiktok"];
 
 function SyncStatusIcon({ status }: { status: SyncStatus }) {
@@ -85,7 +92,7 @@ function syncStatusLabel(status: SyncStatus, result?: SyncResult): string {
   if (status === "loading") return "Syncing…";
   if (status === "success") return result?.followers !== undefined ? `${result.followers.toLocaleString()} followers` : "Profile updated";
   if (status === "quota_exceeded") return "API quota exceeded";
-  if (status === "not_supported") return "Sync not available";
+  if (status === "not_supported") return result?.error ?? "Connect account to sync";
   if (status === "error") return result?.error ?? "Sync failed";
   return "";
 }
@@ -93,6 +100,14 @@ function syncStatusLabel(status: SyncStatus, result?: SyncResult): string {
 export default function Accounts() {
   const utils = trpc.useUtils();
   const { data: accounts, isLoading } = trpc.accounts.list.useQuery();
+
+  // Stable account IDs for OAuth status query
+  const accountIds = useMemo(() => accounts?.map((a) => a.id) ?? [], [accounts]);
+  const { data: oauthStatus, refetch: refetchOAuthStatus } = trpc.accounts.getOAuthStatus.useQuery(
+    { accountIds },
+    { enabled: accountIds.length > 0 }
+  );
+
   const createMutation = trpc.accounts.create.useMutation({
     onSuccess: () => {
       utils.accounts.list.invalidate();
@@ -112,7 +127,6 @@ export default function Accounts() {
   const syncMutation = trpc.accounts.syncStats.useMutation({
     onSuccess: (results) => {
       utils.accounts.list.invalidate();
-      // Update per-account sync status
       const newStatuses: Record<number, SyncStatus> = {};
       const newResults: Record<number, SyncResult> = {};
       for (const r of results) {
@@ -129,14 +143,33 @@ export default function Accounts() {
       const unsupported = results.filter(r => r.status === "not_supported").length;
 
       if (succeeded > 0) toast.success(`Synced ${succeeded} account${succeeded > 1 ? "s" : ""} successfully`);
-      if (quota > 0) toast.warning(`${quota} account${quota > 1 ? "s" : ""}: API quota exceeded — try again next month`);
-      if (unsupported > 0) toast.info(`${unsupported} platform${unsupported > 1 ? "s" : ""} not yet supported for sync`);
+      if (quota > 0) toast.warning(`${quota} account${quota > 1 ? "s" : ""}: API quota exceeded`);
+      if (unsupported > 0) toast.info(`${unsupported} platform${unsupported > 1 ? "s" : ""}: connect OAuth to enable sync`);
       if (failed > 0) toast.error(`${failed} account${failed > 1 ? "s" : ""} failed to sync`);
     },
     onError: (e) => {
       setSyncingAll(false);
       toast.error(`Sync failed: ${e.message}`);
     },
+  });
+
+  const connectOAuthMutation = trpc.accounts.getOAuthConnectUrl.useMutation({
+    onSuccess: ({ url }) => {
+      // Open OAuth popup
+      const popup = window.open(url, "oauth_popup", "width=600,height=700,scrollbars=yes");
+      if (!popup) {
+        toast.error("Popup blocked. Please allow popups for this site.");
+      }
+    },
+    onError: (e) => toast.error(`Could not start OAuth: ${e.message}`),
+  });
+
+  const disconnectMutation = trpc.accounts.disconnectOAuth.useMutation({
+    onSuccess: () => {
+      refetchOAuthStatus();
+      toast.success("Account disconnected");
+    },
+    onError: (e) => toast.error(e.message),
   });
 
   const [open, setOpen] = useState(false);
@@ -148,6 +181,21 @@ export default function Accounts() {
   const [syncStatuses, setSyncStatuses] = useState<Record<number, SyncStatus>>({});
   const [syncResults, setSyncResults] = useState<Record<number, SyncResult>>({});
   const [syncingAll, setSyncingAll] = useState(false);
+
+  // Listen for OAuth popup success/error messages
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === "oauth_success") {
+        const platform = event.data.platform as string;
+        toast.success(`${PLATFORM_LABELS[platform] ?? platform} connected successfully! Run Sync to pull live metrics.`);
+        refetchOAuthStatus();
+      } else if (event.data?.type === "oauth_error") {
+        toast.error(`OAuth failed: ${event.data.error}`);
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [refetchOAuthStatus]);
 
   const handleSyncOne = (accountId: number) => {
     setSyncStatuses(prev => ({ ...prev, [accountId]: "loading" }));
@@ -161,6 +209,18 @@ export default function Accounts() {
     for (const a of accounts) allLoading[a.id] = "loading";
     setSyncStatuses(allLoading);
     syncMutation.mutate({ id: 0 });
+  };
+
+  const handleConnect = (accountId: number, platform: string) => {
+    if (!OAUTH_PLATFORMS.has(platform)) {
+      toast.info(`OAuth for ${PLATFORM_LABELS[platform] ?? platform} is coming soon`);
+      return;
+    }
+    connectOAuthMutation.mutate({
+      accountId,
+      platform: platform as "twitter" | "linkedin" | "instagram",
+      origin: window.location.origin,
+    });
   };
 
   return (
@@ -188,7 +248,7 @@ export default function Accounts() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p className="text-xs">Pull live follower counts from Twitter &amp; LinkedIn APIs</p>
+                <p className="text-xs">Pull live follower counts from connected APIs</p>
               </TooltipContent>
             </Tooltip>
           )}
@@ -214,7 +274,7 @@ export default function Accounts() {
                         return (
                           <SelectItem key={p} value={p}>
                             <div className="flex items-center gap-2">
-                              <span className={`inline-flex p-1 rounded ${color}`}>
+                              <span className={`p-1 rounded ${color}`}>
                                 <Icon className="h-3.5 w-3.5" />
                               </span>
                               {PLATFORM_LABELS[p]}
@@ -243,25 +303,29 @@ export default function Accounts() {
                     onChange={(e) => setForm((f) => ({ ...f, displayName: e.target.value }))}
                   />
                 </div>
-                {/* Platform-specific hint */}
                 {(form.platform === "instagram" || form.platform === "tiktok") && (
                   <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
                     <p className="text-xs text-purple-300">
                       {form.platform === "instagram"
-                        ? "Instagram monitoring tracks hashtag engagement and comment opportunities on public posts."
+                        ? "Instagram requires a Professional (Business/Creator) account for metric sync via OAuth."
                         : "TikTok monitoring discovers trending videos and comment threads matching your campaign keywords."}
                     </p>
                   </div>
                 )}
-                <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                  <p className="text-xs text-amber-400">Credentials are stored securely and encrypted. This demo connects accounts in monitoring mode.</p>
-                </div>
+                {OAUTH_PLATFORMS.has(form.platform) && (
+                  <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-start gap-2">
+                    <ShieldCheck className="h-4 w-4 text-emerald-400 mt-0.5 shrink-0" />
+                    <p className="text-xs text-emerald-300">
+                      After adding, use the <strong>Connect OAuth</strong> button on the card to authorize {PLATFORM_LABELS[form.platform]} and unlock private metrics.
+                    </p>
+                  </div>
+                )}
                 <Button
                   className="w-full"
                   disabled={!form.handle || createMutation.isPending}
                   onClick={() => createMutation.mutate({ platform: form.platform, handle: form.handle, displayName: form.displayName || undefined })}
                 >
-                  {createMutation.isPending ? "Connecting..." : `Connect ${PLATFORM_LABELS[form.platform]} Account`}
+                  {createMutation.isPending ? "Connecting..." : `Add ${PLATFORM_LABELS[form.platform]} Account`}
                 </Button>
               </div>
             </DialogContent>
@@ -294,6 +358,10 @@ export default function Accounts() {
             const syncStatus = syncStatuses[acc.id] ?? "idle";
             const syncResult = syncResults[acc.id];
             const isSyncing = syncStatus === "loading";
+            const isOAuthSupported = OAUTH_PLATFORMS.has(acc.platform);
+            const isConnected = oauthStatus?.[acc.id] ?? false;
+            const isConnecting = connectOAuthMutation.isPending;
+            const isDisconnecting = disconnectMutation.isPending;
 
             return (
               <Card key={acc.id} className={`bg-card border-border hover:border-primary/30 transition-all ${isSyncing ? "opacity-80" : ""}`}>
@@ -304,7 +372,19 @@ export default function Accounts() {
                         <PlatformIcon className="h-5 w-5" />
                       </div>
                       <div>
-                        <p className="font-semibold text-foreground">{acc.displayName ?? acc.handle}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-semibold text-foreground">{acc.displayName ?? acc.handle}</p>
+                          {isConnected && (
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">OAuth connected — private metrics enabled</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground">@{acc.handle}</p>
                       </div>
                     </div>
@@ -356,6 +436,54 @@ export default function Accounts() {
                     </div>
                   </div>
 
+                  {/* OAuth Connect / Disconnect row */}
+                  {isOAuthSupported && (
+                    <div className="mt-3 pt-3 border-t border-border/50">
+                      {isConnected ? (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                            <span className="text-xs text-emerald-400 font-medium">OAuth connected</span>
+                            <span className="text-xs text-muted-foreground">— private metrics active</span>
+                          </div>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-1"
+                                disabled={isDisconnecting}
+                                onClick={() => disconnectMutation.mutate({ accountId: acc.id })}
+                              >
+                                <Unlink className="h-3 w-3" />
+                                Disconnect
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">Remove stored OAuth token</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground">
+                            Connect OAuth to unlock private metrics
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-3 text-xs gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
+                            disabled={isConnecting}
+                            onClick={() => handleConnect(acc.id, acc.platform)}
+                          >
+                            <Link2 className="h-3 w-3" />
+                            Connect {PLATFORM_LABELS[acc.platform]}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between mt-3">
                     <Badge variant="outline" className={`text-xs capitalize border-0 ${colorClass}`}>
                       {PLATFORM_LABELS[acc.platform] ?? acc.platform}
@@ -390,14 +518,21 @@ export default function Accounts() {
         </div>
       )}
 
+      {/* Instagram Live Stats Panel (MCP connected) */}
+      <InstagramPanel />
+
       {/* API coverage info banner */}
       {accounts && accounts.length > 0 && (
-        <div className="rounded-lg border border-border/50 bg-muted/20 p-4">
+        <div className="rounded-lg border border-border/50 bg-muted/20 p-4 space-y-1">
+          <p className="text-xs font-medium text-foreground">OAuth coverage &amp; private metrics</p>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            <span className="font-medium text-foreground">Sync coverage:</span>{" "}
-            <span className="text-sky-400">Twitter/X</span> — live follower &amp; following counts via public API.{" "}
-            <span className="text-blue-400">LinkedIn</span> — display name sync (follower counts not exposed by LinkedIn's API).{" "}
-            <span className="text-muted-foreground">Instagram, TikTok, Reddit</span> — coming soon.
+            <span className="text-sky-400">Twitter/X</span> — follower count, following, tweet count (OAuth required for authenticated requests).{" "}
+            <span className="text-blue-400">LinkedIn</span> — display name verification (follower counts not exposed by LinkedIn's public API).{" "}
+            <span className="text-pink-400">Instagram</span> — follower count &amp; media count (requires Professional account + OAuth).{" "}
+            <span className="text-muted-foreground">TikTok, Reddit</span> — sync not yet supported.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            To connect OAuth: click <strong className="text-foreground">Connect [Platform]</strong> on each card. A secure popup will open for authorization. Tokens are AES-256 encrypted at rest.
           </p>
         </div>
       )}

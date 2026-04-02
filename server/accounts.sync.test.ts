@@ -80,6 +80,30 @@ vi.mock("./scheduler", () => ({
 }));
 vi.mock("./_core/notification", () => ({ notifyOwner: vi.fn() }));
 vi.mock("./routers/team", () => ({ teamRouter: { _def: { procedures: {} } } }));
+// Mock socialOAuth so the OAuth-first code paths return null (fall through to public API)
+vi.mock("./socialOAuth", () => ({
+  getOAuthToken: vi.fn().mockResolvedValue(null),
+  deleteOAuthToken: vi.fn().mockResolvedValue(undefined),
+  getOAuthStatusForAccounts: vi.fn().mockResolvedValue({}),
+  saveOAuthToken: vi.fn().mockResolvedValue(undefined),
+  buildTwitterAuthUrl: vi.fn().mockReturnValue("https://x.com/oauth"),
+  buildLinkedInAuthUrl: vi.fn().mockReturnValue("https://linkedin.com/oauth"),
+  buildInstagramAuthUrl: vi.fn().mockReturnValue("https://facebook.com/oauth"),
+  createOAuthState: vi.fn().mockReturnValue("mock-state"),
+  generatePKCE: vi.fn().mockReturnValue({ verifier: "v", challenge: "c" }),
+  fetchTwitterMetricsWithToken: vi.fn().mockResolvedValue(null),
+  fetchLinkedInProfileWithToken: vi.fn().mockResolvedValue(null),
+  fetchInstagramMetricsWithToken: vi.fn().mockResolvedValue(null),
+  refreshTwitterToken: vi.fn().mockResolvedValue({ accessToken: "new", refreshToken: "new", expiresIn: 7200 }),
+  encryptToken: vi.fn((s: string) => s),
+  decryptToken: vi.fn((s: string) => s),
+}));
+// Mock instagramMcp so it doesn't shell out to manus-mcp-cli during tests
+vi.mock("./instagramMcp", () => ({
+  getInstagramAccountInfo: vi.fn().mockResolvedValue(null),
+  getInstagramPosts: vi.fn().mockResolvedValue([]),
+  getInstagramPostInsights: vi.fn().mockResolvedValue(null),
+}));
 
 import { callDataApi } from "./_core/dataApi";
 import { getAccountsByUser, updateAccount } from "./db";
