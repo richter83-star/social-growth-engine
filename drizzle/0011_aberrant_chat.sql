@@ -1,0 +1,1 @@
+ALTER TABLE `performance_metrics` ADD CONSTRAINT `uniq_user_account_date` UNIQUE(`userId`,`accountId`,`date`);

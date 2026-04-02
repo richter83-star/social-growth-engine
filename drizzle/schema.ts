@@ -8,6 +8,7 @@ import {
   float,
   boolean,
   json,
+  uniqueIndex,
 } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
@@ -137,7 +138,10 @@ export const performanceMetrics = mysqlTable("performance_metrics", {
   threadsDiscovered: int("threadsDiscovered").default(0),
   commentsPosted: int("commentsPosted").default(0),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  // Unique per user+account+date so daily sync can upsert safely
+  uniqUserAccountDate: uniqueIndex("uniq_user_account_date").on(table.userId, table.accountId, table.date),
+}));
 
 export type PerformanceMetric = typeof performanceMetrics.$inferSelect;
 export type InsertPerformanceMetric = typeof performanceMetrics.$inferInsert;

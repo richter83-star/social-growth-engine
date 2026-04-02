@@ -681,6 +681,45 @@ const analyticsRouter = router({
     );
     return { insight, totalOutcomes: outcomes.length, outcomes: outcomes.slice(0, 10) };
   }),
+
+  /**
+   * Returns per-account daily follower snapshots for the growth chart.
+   * Each entry: { date, accountId, handle, platform, followers }
+   */
+  getFollowerGrowth: protectedProcedure
+    .input(z.object({ days: z.number().min(7).max(365).default(30) }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const { performanceMetrics } = await import("../drizzle/schema");
+      const { desc, eq, gte, and, isNotNull } = await import("drizzle-orm");
+      // Cutoff date string (YYYY-MM-DD)
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - input.days);
+      const cutoffStr = cutoff.toISOString().slice(0, 10);
+      // Fetch snapshots joined with account info
+      const accounts = await getAccountsByUser(ctx.user.id);
+      const accountMap = new Map(accounts.map((a) => [a.id, a]));
+      const rows = await db
+        .select()
+        .from(performanceMetrics)
+        .where(
+          and(
+            eq(performanceMetrics.userId, ctx.user.id),
+            isNotNull(performanceMetrics.accountId),
+            gte(performanceMetrics.date, cutoffStr)
+          )
+        )
+        .orderBy(performanceMetrics.date);
+      return rows.map((r) => ({
+        date: r.date,
+        accountId: r.accountId,
+        handle: accountMap.get(r.accountId!)?.handle ?? `Account ${r.accountId}`,
+        platform: accountMap.get(r.accountId!)?.platform ?? "unknown",
+        followers: r.followers ?? 0,
+        followerDelta: r.followerDelta ?? 0,
+      }));
+    }),
 });
 
 // --- Notifications Router -----------------------------------------------------

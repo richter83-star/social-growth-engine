@@ -331,3 +331,17 @@
 - [x] Frontend: Admin Dashboard — "Sync Jobs" tab with schedule info, execution history table, Run Now button
 - [x] Tests: 16 new tests in sync.scheduler.test.ts covering status derivation, log shape, sync logic, and input validation
 - [x] Tests: 132 total tests passing across 13 test files
+
+## Follower Growth Chart (Analytics Page)
+- [x] Backend: `analytics.getFollowerGrowth` tRPC query — returns per-account daily follower snapshots for last N days from performance_metrics
+- [x] DB: Added unique constraint `uniq_user_account_date` on performance_metrics (userId, accountId, date) to enable safe upserts
+- [x] Backend: Wire daily sync job to upsert a performance_metrics row per account after each successful sync (accountId, date, followers)
+- [x] Frontend: Replace existing aggregate "Follower Growth" area chart with a multi-line chart showing absolute follower counts per account
+- [x] Frontend: Time-range selector (7d / 30d / 90d) above the chart
+- [x] Frontend: Per-account color-coded lines with legend showing handle and platform icon
+- [x] Frontend: Net-change badges per account (e.g. +50, -10) in chart header
+- [x] Frontend: Empty state when no sync data exists yet (prompt user to run sync)
+- [x] Frontend: Tooltip showing exact follower count and account handle on hover
+- [x] Frontend: Refresh button to re-fetch data without page reload
+- [x] Tests: 18 new tests in follower.growth.test.ts covering account list, pivot, net-change, time-range, and response shape
+- [x] Tests: 150 total tests passing across 14 test files

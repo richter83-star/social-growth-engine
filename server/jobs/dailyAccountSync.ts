@@ -6,7 +6,7 @@
  */
 import { callDataApi } from "../_core/dataApi";
 import { getDb } from "../db";
-import { socialAccounts, syncJobLogs } from "../../drizzle/schema";
+import { socialAccounts, syncJobLogs, performanceMetrics } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { getOAuthToken } from "../socialOAuth";
 import { fetchLinkedInProfileWithToken, fetchInstagramMetricsWithToken } from "../socialOAuth";
@@ -175,8 +175,31 @@ export async function runDailyAccountSync(): Promise<void> {
           displayName: account.displayName,
         });
         results.push(result);
-        if (result.status === "success") succeeded++;
-        else if (result.status === "skipped" || result.status === "not_supported") skipped++;
+        if (result.status === "success") {
+          succeeded++;
+          // Record daily follower snapshot for the growth chart
+          const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+          const followerCount = result.followers ?? account.followers ?? 0;
+          const prevFollowers = account.followers ?? 0;
+          await db.insert(performanceMetrics)
+            .values({
+              userId: account.userId,
+              accountId: account.id,
+              date: today,
+              followers: followerCount,
+              followerDelta: followerCount - prevFollowers,
+            })
+            .onDuplicateKeyUpdate({
+              set: {
+                followers: followerCount,
+                followerDelta: followerCount - prevFollowers,
+              },
+            })
+            .catch((snapshotErr: unknown) => {
+              const msg = snapshotErr instanceof Error ? snapshotErr.message : String(snapshotErr);
+              console.warn(`[DailySync] Could not upsert snapshot for account ${account.id}: ${msg}`);
+            });
+        } else if (result.status === "skipped" || result.status === "not_supported") skipped++;
         else failed++;
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
