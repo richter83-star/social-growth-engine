@@ -10,9 +10,18 @@
 import { z } from "zod";
 import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import { getDb } from "../db";
-import { users, referrals } from "../../drizzle/schema";
-import { eq, sql, desc, count } from "drizzle-orm";
+import { users, referrals, subscriptions } from "../../drizzle/schema";
+import { eq, sql, desc, count, isNull, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
+import Stripe from "stripe";
+import { applyReferralCredit, getPendingCredits, REFERRAL_COUPON_ID } from "../referralCredit";
+
+// Lazy Stripe instance (only used when claimCredit is called)
+function getStripe(): Stripe {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error("STRIPE_SECRET_KEY not configured");
+  return new Stripe(key, { apiVersion: "2026-03-25.dahlia" });
+}
 
 export const referralsRouter = router({
   /** Get the current user's referral code and stats */
@@ -105,6 +114,67 @@ export const referralsRouter = router({
       });
 
       return { success: true };
+    }),
+
+  /** Get credit status: how many credits have been applied vs pending */
+  getCreditStatus: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return { creditedCount: 0, pendingCount: 0 };
+
+    const [credited] = await db
+      .select({ count: count() })
+      .from(referrals)
+      .where(
+        and(
+          eq(referrals.referrerId, ctx.user.id),
+          eq(referrals.status, "converted"),
+          // creditedAt IS NOT NULL means credit was applied
+          sql`${referrals.creditedAt} IS NOT NULL`
+        )
+      );
+
+    const pending = await getPendingCredits(ctx.user.id);
+
+    return {
+      creditedCount: Number(credited?.count ?? 0),
+      pendingCount: pending.length,
+      pendingReferralIds: pending.map(r => r.id),
+    };
+  }),
+
+  /** Manual claim: apply credit for a converted referral that wasn't auto-credited */
+  claimCredit: protectedProcedure
+    .input(z.object({ referralId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("DB unavailable");
+
+      // Verify the referral belongs to this user and is converted but not credited
+      const [referral] = await db
+        .select()
+        .from(referrals)
+        .where(
+          and(
+            eq(referrals.id, input.referralId),
+            eq(referrals.referrerId, ctx.user.id),
+            eq(referrals.status, "converted"),
+            isNull(referrals.creditedAt)
+          )
+        )
+        .limit(1);
+
+      if (!referral) {
+        throw new Error("Referral not found, already credited, or not eligible");
+      }
+
+      const stripe = getStripe();
+      const result = await applyReferralCredit(stripe, ctx.user.id, referral.id);
+
+      if (!result.success) {
+        throw new Error(result.reason ?? "Failed to apply credit");
+      }
+
+      return { success: true, message: "1 month free credit applied to your subscription!" };
     }),
 
   /** Get top referrers leaderboard (public — for social proof) */

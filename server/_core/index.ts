@@ -12,6 +12,7 @@ import { initScheduler } from "../scheduler";
 import Stripe from "stripe";
 import { upsertSubscription } from "../db";
 import { notifyOwner } from "./notification";
+import { ensureReferralCoupon, processReferralOnCheckout } from "../referralCredit";
 
 const PLAN_PRICE: Record<string, number> = { free: 0, pro: 49, agency: 149 };
 
@@ -78,6 +79,13 @@ async function startServer() {
             currentPeriodEnd: new Date(periodEnd * 1000),
           });
           console.log(`[Webhook] Subscription activated for user ${userId} on plan ${plan}`);
+
+          // Process referral credit for the buyer (if they were referred)
+          try {
+            await processReferralOnCheckout(stripe, userId);
+          } catch (refErr) {
+            console.error("[Webhook] Referral credit processing failed:", refErr);
+          }
 
           // Notify owner of new paid subscription
           try {
@@ -152,6 +160,8 @@ async function startServer() {
 
   // Initialize cron scheduler after server starts
   initScheduler().catch((err) => console.error("[Scheduler] Init failed:", err));
+  // Ensure the referral reward coupon exists in Stripe (idempotent)
+  ensureReferralCoupon(stripe).catch((err) => console.error("[Referral] Coupon init failed:", err));
 }
 
 startServer().catch(console.error);

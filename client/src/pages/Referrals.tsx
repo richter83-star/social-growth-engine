@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
-  Copy, Check, Twitter, Linkedin, Gift, Trophy, Users, TrendingUp, ExternalLink,
+  Copy, Check, Twitter, Linkedin, Gift, Trophy, Users, TrendingUp, ExternalLink, Sparkles, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,8 +20,22 @@ export default function Referrals() {
   const [copied, setCopied] = useState(false);
 
   const { data: myCode, isLoading } = trpc.referrals.getMyCode.useQuery();
-  const { data: referralList } = trpc.referrals.getReferralList.useQuery();
+  const { data: referralList, refetch: refetchList } = trpc.referrals.getReferralList.useQuery();
   const { data: leaderboard } = trpc.referrals.getLeaderboard.useQuery();
+  const { data: creditStatus, refetch: refetchCreditStatus } = trpc.referrals.getCreditStatus.useQuery();
+  const utils = trpc.useUtils();
+
+  const claimCredit = trpc.referrals.claimCredit.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message ?? "1 month free credit applied!");
+      refetchCreditStatus();
+      refetchList();
+      utils.referrals.getMyCode.invalidate();
+    },
+    onError: (err) => {
+      toast.error(err.message ?? "Failed to claim credit");
+    },
+  });
 
   const handleCopy = async (text: string) => {
     await navigator.clipboard.writeText(text);
@@ -89,13 +103,51 @@ export default function Referrals() {
           <CardContent className="p-5">
             <div className="flex items-center gap-2 mb-1">
               <Gift className="h-4 w-4 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground uppercase tracking-wide">Credits Earned</span>
+              <span className="text-xs text-muted-foreground uppercase tracking-wide">Credits Applied</span>
             </div>
-            <p className="text-3xl font-bold text-violet-400">{myCode?.creditsEarned ?? 0}</p>
-            <p className="text-xs text-muted-foreground">free months</p>
+            <p className="text-3xl font-bold text-violet-400">{creditStatus?.creditedCount ?? myCode?.creditsEarned ?? 0}</p>
+            <p className="text-xs text-muted-foreground">free months applied</p>
           </CardContent>
         </Card>
       </div>
+
+      {/* Pending credit claim banner */}
+      {creditStatus && creditStatus.pendingCount > 0 && (
+        <Card className="bg-gradient-to-br from-amber-500/10 to-violet-500/10 border-amber-500/30">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
+                  <Sparkles className="h-5 w-5 text-amber-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    You have {creditStatus.pendingCount} unclaimed free month{creditStatus.pendingCount > 1 ? "s" : ""}!
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Your referral converted but the credit wasn't auto-applied. Claim it now.
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="bg-amber-500 hover:bg-amber-600 text-black font-semibold shrink-0 gap-2"
+                disabled={claimCredit.isPending}
+                onClick={() => {
+                  const firstId = creditStatus.pendingReferralIds?.[0];
+                  if (firstId) claimCredit.mutate({ referralId: firstId });
+                }}
+              >
+                {claimCredit.isPending ? (
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Claiming...</>
+                ) : (
+                  <><Sparkles className="h-3.5 w-3.5" /> Claim Free Month</>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Referral link card */}
       <Card className="bg-gradient-to-br from-violet-500/10 to-cyan-500/10 border-violet-500/20">
@@ -192,12 +244,14 @@ export default function Referrals() {
                     </div>
                     <Badge
                       className={
-                        ref.status === "converted"
+                        ref.creditedAt
+                          ? "bg-violet-500/20 text-violet-300 border-0"
+                          : ref.status === "converted"
                           ? "bg-emerald-500/20 text-emerald-300 border-0"
                           : "bg-amber-500/20 text-amber-300 border-0"
                       }
                     >
-                      {ref.status === "converted" ? "Converted" : "Pending"}
+                      {ref.creditedAt ? "Credited ✓" : ref.status === "converted" ? "Converted" : "Pending"}
                     </Badge>
                   </div>
                 ))}

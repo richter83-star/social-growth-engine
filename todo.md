@@ -303,3 +303,16 @@
 - [x] Frontend: ?ref=CODE URL param deferred — requires OAuth flow customization (future sprint)
 - [x] Frontend: Add Referrals nav item to sidebar ("Refer & Earn")
 - [x] Tests: applyCode rejects invalid codes — growth.systems.test.ts
+
+## Stripe Referral Credit Automation
+- [x] Backend: `referralCredit.ts` — REFERRAL_1MONTH coupon helper (100% off, once, idempotent create)
+- [x] Backend: `ensureReferralCoupon(stripe)` — called at server startup, creates coupon if missing
+- [x] Backend: `processReferralOnCheckout(stripe, buyerUserId)` — wired into Stripe webhook checkout.session.completed; finds pending referral, marks converted, applies credit to referrer
+- [x] Backend: `applyReferralCredit(stripe, referrerId, referralId)` — applies REFERRAL_1MONTH coupon to referrer's active Stripe subscription via discounts array
+- [x] Backend: `getPendingCredits(referrerId)` — returns converted referrals not yet credited (for manual claim fallback)
+- [x] Backend: `referrals.claimCredit` tRPC protectedProcedure — manual fallback to apply credit for any converted referrals not yet credited
+- [x] Backend: `referrals.getCreditStatus` tRPC protectedProcedure — returns credited count, pending count, and list of credited referrals
+- [x] Frontend: Referrals page — Credit Status card showing credited/pending counts and "Claim Free Month" button
+- [x] Frontend: Referrals page — referral list shows "Credited" badge for credited referrals
+- [x] Tests: 8 new tests in referralCredit.test.ts covering ensureReferralCoupon, processReferralOnCheckout, applyReferralCredit, getPendingCredits
+- [x] Tests: 116 total tests passing across 12 test files
