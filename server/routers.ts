@@ -48,6 +48,9 @@ import { getDb } from "./db";
 import Stripe from "stripe";
 import { PLAN_LIMITS, STRIPE_PRICES } from "./products";
 
+// In-memory rate-limit map for syncMyAccounts: userId -> last run timestamp (ms)
+const syncLastRunMap = new Map<number, number>();
+
 // --- Accounts Router ----------------------------------------------------------
 const accountsRouter = router({
   list: protectedProcedure.query(({ ctx }) => getAccountsByUser(ctx.user.id)),
@@ -317,8 +320,24 @@ const accountsRouter = router({
   /**
    * Sync all active accounts for the current user and record daily snapshots.
    * Designed for the Analytics page "Sync Now" button.
+   * Rate-limited to once per 60 seconds per user (server-side in-memory guard).
    */
   syncMyAccounts: protectedProcedure.mutation(async ({ ctx }) => {
+    // ── Server-side rate limit ────────────────────────────────────────────────
+    const SYNC_COOLDOWN_MS = 60_000; // 60 seconds
+    const now = Date.now();
+    const lastSyncTime = syncLastRunMap.get(ctx.user.id) ?? 0;
+    const elapsed = now - lastSyncTime;
+    if (elapsed < SYNC_COOLDOWN_MS) {
+      const cooldownSeconds = Math.ceil((SYNC_COOLDOWN_MS - elapsed) / 1000);
+      throw new TRPCError({
+        code: "TOO_MANY_REQUESTS",
+        message: `Please wait ${cooldownSeconds} second${cooldownSeconds !== 1 ? "s" : ""} before syncing again.`,
+      });
+    }
+    syncLastRunMap.set(ctx.user.id, now);
+    // ─────────────────────────────────────────────────────────────────────────
+
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
 

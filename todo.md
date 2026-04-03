@@ -355,3 +355,15 @@
 - [x] Frontend: Secondary "Sync Now" button in chart empty state for discoverability
 - [x] Tests: 22 new tests in sync.manual.test.ts covering summary messages, active filtering, platform classification, snapshot values, and response shape
 - [x] Tests: 172 total tests passing across 15 test files
+
+## Sync Now Rate Limiting
+- [x] Backend: Server-side per-user rate limit on syncMyAccounts — rejects with TOO_MANY_REQUESTS if last sync was < 60s ago, message includes exact seconds remaining
+- [x] Backend: In-memory syncLastRunMap (Map<userId, timestamp>) — module-level, survives hot reload
+- [x] Frontend: useSyncCooldown hook (client/src/hooks/useSyncCooldown.ts) — tracks cooldownUntil in localStorage, exposes isOnCooldown + secondsLeft + startCooldown
+- [x] Frontend: Sync Now button disabled and shows "Sync in Xs" countdown during cooldown, min-width to prevent layout shift
+- [x] Frontend: "Next sync available in Xs" hint text below button during cooldown
+- [x] Frontend: Cooldown persists across page navigations (localStorage key: sync_cooldown_{userId})
+- [x] Frontend: Secondary empty-state Sync Now button also respects cooldown via onSyncNow/isSyncing props
+- [x] Frontend: Server-side TOO_MANY_REQUESTS error also triggers client cooldown (fallback guard)
+- [x] Tests: 21 new tests in sync.ratelimit.test.ts covering message format, isRateLimited, storage key, countdown math, and full lifecycle
+- [x] Tests: 193 total tests passing across 16 test files

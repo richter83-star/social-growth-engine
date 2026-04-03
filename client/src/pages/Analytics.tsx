@@ -1,4 +1,6 @@
 import { useState, useMemo } from "react";
+import { useSyncCooldown } from "@/hooks/useSyncCooldown";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -278,12 +280,15 @@ function FollowerGrowthChart({ onSyncNow, isSyncing }: { onSyncNow: () => void; 
 // ─── Main Analytics Page ──────────────────────────────────────────────────────
 
 export default function Analytics() {
+  const { user } = useAuth();
   const utils = trpc.useUtils();
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const { isOnCooldown, secondsLeft, startCooldown } = useSyncCooldown(user?.id);
 
   const syncMutation = trpc.accounts.syncMyAccounts.useMutation({
     onSuccess: (data) => {
       setLastSyncedAt(new Date().toLocaleTimeString());
+      startCooldown();
       utils.analytics.getFollowerGrowth.invalidate();
       utils.analytics.metrics.invalidate();
       const msg = data.synced > 0
@@ -294,9 +299,19 @@ export default function Analytics() {
       toast.success("Sync complete", { description: msg });
     },
     onError: (err) => {
+      // If server rejected due to rate limit, still start a client-side cooldown
+      // so the button stays disabled until the server window expires too.
+      if (err.message.includes("wait")) startCooldown();
       toast.error("Sync failed", { description: err.message });
     },
   });
+
+  const syncDisabled = syncMutation.isPending || isOnCooldown;
+  const syncLabel = syncMutation.isPending
+    ? "Syncing…"
+    : isOnCooldown
+    ? `Sync in ${secondsLeft}s`
+    : "Sync Now";
 
   const { data: metrics, isLoading: metricsLoading } = trpc.analytics.metrics.useQuery({ days: 30 });
   const { data: roi } = trpc.analytics.roi.useQuery({ days: 30 });
@@ -327,14 +342,17 @@ export default function Analytics() {
         <div className="flex flex-col items-end gap-1">
           <Button
             onClick={() => syncMutation.mutate()}
-            disabled={syncMutation.isPending}
-            className="gap-2"
+            disabled={syncDisabled}
+            className="gap-2 min-w-[120px]"
           >
             <RefreshCw className={`h-4 w-4 ${syncMutation.isPending ? "animate-spin" : ""}`} />
-            {syncMutation.isPending ? "Syncing…" : "Sync Now"}
+            {syncLabel}
           </Button>
-          {lastSyncedAt && (
+          {lastSyncedAt && !isOnCooldown && (
             <p className="text-xs text-muted-foreground">Last synced at {lastSyncedAt}</p>
+          )}
+          {isOnCooldown && (
+            <p className="text-xs text-muted-foreground/60">Next sync available in {secondsLeft}s</p>
           )}
         </div>
       </div>
