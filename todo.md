@@ -380,3 +380,13 @@
 - [x] Verified: robots.txt served as text/plain (HTTP 200, Content-Type: text/plain)
 - [x] Verified: sitemap.xml served as text/xml (HTTP 200, Content-Type: text/xml)
 - [x] No server-side changes needed — express.static() handles MIME types automatically; fallback to index.html only fires when no file matches
+
+## SEO Fixes (Landing Page /)
+- [x] Title fixed: "Social Growth Engine – AI Social Media Growth" — 47 characters (was 20)
+- [x] Meta description added: 152 characters — "Grow your social media following with AI-powered engagement, automated outreach, and follower analytics. Connect Twitter, Instagram, LinkedIn, and more."
+- [x] Meta keywords added: social media growth, AI engagement, follower growth, social media automation, Twitter growth, Instagram growth, LinkedIn outreach, social media analytics
+- [x] Open Graph tags added: og:type, og:url, og:title, og:description
+- [x] Twitter Card tags added: twitter:card, twitter:title, twitter:description
+- [x] Canonical link added: https://socialgrowth.live/
+- [x] robots meta tag added: index, follow
+- [x] Verified live on dev server — all tags present in HTML response
