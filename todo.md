@@ -367,3 +367,9 @@
 - [x] Frontend: Server-side TOO_MANY_REQUESTS error also triggers client cooldown (fallback guard)
 - [x] Tests: 21 new tests in sync.ratelimit.test.ts covering message format, isRateLimited, storage key, countdown math, and full lifecycle
 - [x] Tests: 193 total tests passing across 16 test files
+
+## Bug: Broken Payment Links
+- [x] Root cause: STRIPE_PRICE_PRO and STRIPE_PRICE_AGENCY env vars contained stale price IDs from a different Stripe account
+- [x] Fix: Updated both secrets with correct price IDs from user's Stripe dashboard (price_1THTN2Lw2oq9utGCZ127n8JB for Pro, price_1THTN2Lw2oq9utGCsThoaV3j for Agency)
+- [x] Validation: stripe.prices.test.ts confirms both IDs are set, non-placeholder, and distinct
+- [x] Tests: 196 total tests passing across 17 test files
