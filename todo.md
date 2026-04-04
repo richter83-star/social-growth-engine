@@ -373,3 +373,10 @@
 - [x] Fix: Updated both secrets with correct price IDs from user's Stripe dashboard (price_1THTN2Lw2oq9utGCZ127n8JB for Pro, price_1THTN2Lw2oq9utGCsThoaV3j for Agency)
 - [x] Validation: stripe.prices.test.ts confirms both IDs are set, non-placeholder, and distinct
 - [x] Tests: 196 total tests passing across 17 test files
+
+## Static SEO Files
+- [x] Added client/public/robots.txt — User-agent: *, Allow: /, Disallow: /api/, Sitemap reference to socialgrowth.live
+- [x] Added client/public/sitemap.xml — single URL entry for https://socialgrowth.live/ with weekly changefreq and priority 1.0
+- [x] Verified: robots.txt served as text/plain (HTTP 200, Content-Type: text/plain)
+- [x] Verified: sitemap.xml served as text/xml (HTTP 200, Content-Type: text/xml)
+- [x] No server-side changes needed — express.static() handles MIME types automatically; fallback to index.html only fires when no file matches
