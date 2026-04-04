@@ -390,3 +390,9 @@
 - [x] Canonical link added: https://socialgrowth.live/
 - [x] robots meta tag added: index, follow
 - [x] Verified live on dev server — all tags present in HTML response
+
+## Expanded Sitemap
+- [x] Replaced client/public/sitemap.xml with 24-URL expanded version covering homepage, product landing pages, use case pages, comparison pages, supporting pages, blog posts, and legal pages
+- [x] Fixed missing leading `?` on XML declaration (attachment had `?xml` instead of `<?xml`)
+- [x] Added image sitemap namespace and og:image entry for homepage
+- [x] Verified: HTTP 200, Content-Type: text/xml, 24 `<loc>` entries served correctly
