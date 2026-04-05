@@ -18,6 +18,24 @@ import Team from "./pages/Team";
 import Help from "@/pages/Help";
 import Referrals from "@/pages/Referrals";
 import { SupportChat } from "./components/SupportChat";
+// Landing pages
+import TwitterGrowthTool from "@/pages/landing/TwitterGrowthTool";
+import LinkedInAutomation from "@/pages/landing/LinkedInAutomation";
+import AISocialMediaManager from "@/pages/landing/AISocialMediaManager";
+import AutomatedSocialEngagement from "@/pages/landing/AutomatedSocialEngagement";
+import SocialMediaAnalyticsPage from "@/pages/landing/SocialMediaAnalyticsPage";
+import BestSocialMediaScheduler from "@/pages/landing/BestSocialMediaScheduler";
+import ForStartups from "@/pages/landing/ForStartups";
+import ForAgencies from "@/pages/landing/ForAgencies";
+import ForCreators from "@/pages/landing/ForCreators";
+import VsHootsuite from "@/pages/landing/VsHootsuite";
+import VsBuffer from "@/pages/landing/VsBuffer";
+import VsSproutSocial from "@/pages/landing/VsSproutSocial";
+import FeaturesPage from "@/pages/landing/Features";
+import About from "@/pages/landing/About";
+import Blog from "@/pages/landing/Blog";
+import { BlogPostTwitterGrowth, BlogPostLinkedIn, BlogPostAutomation, BlogPostInstagram, BlogPostAITools } from "@/pages/landing/BlogPosts";
+import { PrivacyPolicy, TermsOfService, Contact } from "@/pages/landing/LegalPages";
 import BillingSuccess from "./pages/BillingSuccess";
 import AdminDashboard from "./pages/AdminDashboard";
 import OnboardingWizard from "./components/OnboardingWizard";
@@ -87,6 +105,35 @@ function Router() {
       <Route path="/" component={LandingPage} />
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/404" component={NotFound} />
+      {/* Product landing pages */}
+      <Route path="/twitter-growth-tool" component={TwitterGrowthTool} />
+      <Route path="/linkedin-automation" component={LinkedInAutomation} />
+      <Route path="/ai-social-media-manager" component={AISocialMediaManager} />
+      <Route path="/automated-social-engagement" component={AutomatedSocialEngagement} />
+      <Route path="/social-media-analytics" component={SocialMediaAnalyticsPage} />
+      <Route path="/best-social-media-scheduler" component={BestSocialMediaScheduler} />
+      {/* Use-case pages */}
+      <Route path="/for-startups" component={ForStartups} />
+      <Route path="/for-agencies" component={ForAgencies} />
+      <Route path="/for-creators" component={ForCreators} />
+      {/* Comparison pages */}
+      <Route path="/vs-hootsuite" component={VsHootsuite} />
+      <Route path="/vs-buffer" component={VsBuffer} />
+      <Route path="/vs-sprout-social" component={VsSproutSocial} />
+      {/* Supporting pages */}
+      <Route path="/features" component={FeaturesPage} />
+      <Route path="/about" component={About} />
+      {/* Blog */}
+      <Route path="/blog" component={Blog} />
+      <Route path="/blog/how-to-grow-twitter-followers" component={BlogPostTwitterGrowth} />
+      <Route path="/blog/linkedin-engagement-tips" component={BlogPostLinkedIn} />
+      <Route path="/blog/social-media-automation-guide" component={BlogPostAutomation} />
+      <Route path="/blog/instagram-growth-strategy" component={BlogPostInstagram} />
+      <Route path="/blog/ai-social-media-tools" component={BlogPostAITools} />
+      {/* Legal */}
+      <Route path="/privacy" component={PrivacyPolicy} />
+      <Route path="/terms" component={TermsOfService} />
+      <Route path="/contact" component={Contact} />
       <Route component={DashboardRouter} />
     </Switch>
   );

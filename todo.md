@@ -396,3 +396,32 @@
 - [x] Fixed missing leading `?` on XML declaration (attachment had `?xml` instead of `<?xml`)
 - [x] Added image sitemap namespace and og:image entry for homepage
 - [x] Verified: HTTP 200, Content-Type: text/xml, 24 `<loc>` entries served correctly
+
+## Landing Pages (SEO)
+- [x] Product: /twitter-growth-tool — TwitterGrowthTool.tsx
+- [x] Product: /linkedin-automation — LinkedInAutomation.tsx
+- [x] Product: /ai-social-media-manager — AISocialMediaManager.tsx
+- [x] Product: /automated-social-engagement — AutomatedSocialEngagement.tsx
+- [x] Product: /social-media-analytics — SocialMediaAnalyticsPage.tsx
+- [x] Product: /best-social-media-scheduler — BestSocialMediaScheduler.tsx
+- [x] Use Case: /for-startups — ForStartups.tsx
+- [x] Use Case: /for-agencies — ForAgencies.tsx
+- [x] Use Case: /for-creators — ForCreators.tsx
+- [x] Comparison: /vs-hootsuite — VsHootsuite.tsx
+- [x] Comparison: /vs-buffer — VsBuffer.tsx
+- [x] Comparison: /vs-sprout-social — VsSproutSocial.tsx
+- [x] Supporting: /features — Features.tsx
+- [x] Supporting: /about — About.tsx
+- [x] Blog: /blog (index) — Blog.tsx with 5 post cards
+- [x] Blog: /blog/how-to-grow-twitter-followers — BlogPosts.tsx
+- [x] Blog: /blog/linkedin-engagement-tips — BlogPosts.tsx
+- [x] Blog: /blog/social-media-automation-guide — BlogPosts.tsx
+- [x] Blog: /blog/instagram-growth-strategy — BlogPosts.tsx
+- [x] Blog: /blog/ai-social-media-tools — BlogPosts.tsx
+- [x] Legal: /privacy — LegalPages.tsx
+- [x] Legal: /terms — LegalPages.tsx
+- [x] Legal: /contact — LegalPages.tsx
+- [x] Shared PublicPageLayout component with nav (logo, links, CTA) and footer (links, copyright)
+- [x] All 23 routes wired in App.tsx Router function
+- [x] All routes verified HTTP 200 on dev server
+- [x] Sitemap lastmod automation: scripts/update-sitemap.mjs — updates specific URL or all URLs to today's date
