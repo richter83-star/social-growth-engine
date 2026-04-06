@@ -425,3 +425,15 @@
 - [x] All 23 routes wired in App.tsx Router function
 - [x] All routes verified HTTP 200 on dev server
 - [x] Sitemap lastmod automation: scripts/update-sitemap.mjs — updates specific URL or all URLs to today's date
+
+## Public Pricing Page (/pricing)
+- [x] Public /pricing page — plan cards (Free, Pro $49/mo, Agency $149/mo) with monthly/annual toggle (annual = 20% off)
+- [x] Plan cards: highlighted "Most Popular" badge on Pro, feature list per plan, Get Started CTA buttons
+- [x] Detailed feature comparison table — 6 categories, 30+ feature rows, checkmarks/X/text values per plan
+- [x] FAQ section — 6 questions covering billing, cancellation, free trial, team seats, platform TOS compliance
+- [x] Social proof bar — testimonial quote, 5-star rating, "2,400+ users / 4.8/5 / 12M+ threads" stats
+- [x] Bottom CTA section — "Get Started Free" + "Talk to Sales" buttons with trust copy
+- [x] Wire /pricing route in App.tsx (public, no auth required)
+- [x] Update sitemap.xml lastmod for /pricing to 2026-04-05
+- [x] Verified HTTP 200 on dev server
+- [x] TypeScript: 0 errors

@@ -36,6 +36,7 @@ import About from "@/pages/landing/About";
 import Blog from "@/pages/landing/Blog";
 import { BlogPostTwitterGrowth, BlogPostLinkedIn, BlogPostAutomation, BlogPostInstagram, BlogPostAITools } from "@/pages/landing/BlogPosts";
 import { PrivacyPolicy, TermsOfService, Contact } from "@/pages/landing/LegalPages";
+import Pricing from "@/pages/landing/Pricing";
 import BillingSuccess from "./pages/BillingSuccess";
 import AdminDashboard from "./pages/AdminDashboard";
 import OnboardingWizard from "./components/OnboardingWizard";
@@ -130,6 +131,8 @@ function Router() {
       <Route path="/blog/social-media-automation-guide" component={BlogPostAutomation} />
       <Route path="/blog/instagram-growth-strategy" component={BlogPostInstagram} />
       <Route path="/blog/ai-social-media-tools" component={BlogPostAITools} />
+      {/* Pricing */}
+      <Route path="/pricing" component={Pricing} />
       {/* Legal */}
       <Route path="/privacy" component={PrivacyPolicy} />
       <Route path="/terms" component={TermsOfService} />
