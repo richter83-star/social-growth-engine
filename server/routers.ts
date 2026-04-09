@@ -47,6 +47,14 @@ import { invokeLLM } from "./_core/llm";
 import { getDb } from "./db";
 import Stripe from "stripe";
 import { PLAN_LIMITS, STRIPE_PRICES } from "./products";
+import { Nango } from "@nangohq/node";
+
+// Nango client for OAuth token management
+function getNangoClient() {
+  const secretKey = process.env.NANGO_SECRET_KEY;
+  if (!secretKey) throw new Error("NANGO_SECRET_KEY not configured");
+  return new Nango({ secretKey });
+}
 
 // NOTE: rate limiting for syncMyAccounts is now DB-backed (see syncMyAccounts mutation)
 
@@ -191,6 +199,75 @@ const accountsRouter = router({
       const account = accounts.find(a => a.id === input.accountId);
       if (!account) throw new TRPCError({ code: "NOT_FOUND", message: "Account not found" });
       await deleteOAuthToken(ctx.user.id, input.accountId);
+      return { success: true };
+    }),
+  // Nango: create a connect session token for the frontend popup
+  getNangoConnectSession: protectedProcedure
+    .input(z.object({
+      accountId: z.number(),
+      platform: z.enum(["twitter", "linkedin", "instagram"]),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const accounts = await getAccountsByUser(ctx.user.id);
+      const account = accounts.find(a => a.id === input.accountId);
+      if (!account) throw new TRPCError({ code: "NOT_FOUND", message: "Account not found" });
+      const integrationMap: Record<string, string> = {
+        twitter: "twitter-v2",
+        linkedin: "linkedin",
+        instagram: "instagram",
+      };
+      const integrationId = integrationMap[input.platform];
+      if (!integrationId) throw new TRPCError({ code: "BAD_REQUEST", message: "Unsupported platform" });
+      const nango = getNangoClient();
+      const session = await nango.createConnectSession({
+        end_user: {
+          id: String(ctx.user.id),
+          email: ctx.user.email ?? undefined,
+          display_name: ctx.user.name ?? undefined,
+        },
+        allowed_integrations: [integrationId],
+      });
+      return {
+        sessionToken: session.data.token,
+        integrationId,
+        connectionId: `user-${ctx.user.id}-account-${input.accountId}`,
+      };
+    }),
+  // Nango: called after OAuth popup succeeds to store token in our DB
+  nangoConnected: protectedProcedure
+    .input(z.object({
+      accountId: z.number(),
+      platform: z.enum(["twitter", "linkedin", "instagram"]),
+      connectionId: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const accounts = await getAccountsByUser(ctx.user.id);
+      const account = accounts.find(a => a.id === input.accountId);
+      if (!account) throw new TRPCError({ code: "NOT_FOUND", message: "Account not found" });
+      const integrationMap: Record<string, string> = {
+        twitter: "twitter-v2",
+        linkedin: "linkedin",
+        instagram: "instagram",
+      };
+      const integrationId = integrationMap[input.platform];
+      if (!integrationId) throw new TRPCError({ code: "BAD_REQUEST", message: "Unsupported platform" });
+      // Retrieve the access token from Nango
+      const nango = getNangoClient();
+      const token = await nango.getToken(integrationId, input.connectionId);
+      if (!token || typeof token !== "string") {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to retrieve token from Nango" });
+      }
+      // Get connection details for refresh token
+      const conn = await nango.getConnection(integrationId, input.connectionId, false, true);
+      const credentials = conn.credentials as { access_token?: string; refresh_token?: string; expires_at?: string; raw?: Record<string, string> };
+      const expiresAt = credentials.expires_at ? new Date(credentials.expires_at) : null;
+      const scope = credentials.raw?.scope ?? null;
+      await (await import("./socialOAuth")).saveOAuthToken(ctx.user.id, input.accountId, input.platform, {
+        accessToken: token,
+        refreshToken: credentials.refresh_token ?? null,
+        expiresAt,
+        scope,
+      });
       return { success: true };
     }),
 

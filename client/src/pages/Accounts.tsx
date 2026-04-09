@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import Nango from "@nangohq/frontend";
 import InstagramPanel from "@/components/InstagramPanel";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent } from "@/components/ui/card";
@@ -153,15 +154,13 @@ export default function Accounts() {
     },
   });
 
-  const connectOAuthMutation = trpc.accounts.getOAuthConnectUrl.useMutation({
-    onSuccess: ({ url }) => {
-      // Open OAuth popup
-      const popup = window.open(url, "oauth_popup", "width=600,height=700,scrollbars=yes");
-      if (!popup) {
-        toast.error("Popup blocked. Please allow popups for this site.");
-      }
+  const [connectingAccountId, setConnectingAccountId] = useState<number | null>(null);
+
+  const nangoSessionMutation = trpc.accounts.getNangoConnectSession.useMutation();
+  const nangoConnectedMutation = trpc.accounts.nangoConnected.useMutation({
+    onSuccess: () => {
+      refetchOAuthStatus();
     },
-    onError: (e) => toast.error(`Could not start OAuth: ${e.message}`),
   });
 
   const disconnectMutation = trpc.accounts.disconnectOAuth.useMutation({
@@ -182,20 +181,25 @@ export default function Accounts() {
   const [syncResults, setSyncResults] = useState<Record<number, SyncResult>>({});
   const [syncingAll, setSyncingAll] = useState(false);
 
-  // Listen for OAuth popup success/error messages
-  useEffect(() => {
-    const handler = (event: MessageEvent) => {
-      if (event.data?.type === "oauth_success") {
-        const platform = event.data.platform as string;
-        toast.success(`${PLATFORM_LABELS[platform] ?? platform} connected successfully! Run Sync to pull live metrics.`);
-        refetchOAuthStatus();
-      } else if (event.data?.type === "oauth_error") {
-        toast.error(`OAuth failed: ${event.data.error}`);
+  // Nango connect handler — creates session token, opens popup, stores token
+  const handleNangoConnect = useCallback(async (accountId: number, platform: "twitter" | "linkedin" | "instagram") => {
+    setConnectingAccountId(accountId);
+    try {
+      const { sessionToken, integrationId, connectionId } = await nangoSessionMutation.mutateAsync({ accountId, platform });
+      const nango = new Nango({ connectSessionToken: sessionToken });
+      await nango.auth(integrationId, connectionId);
+      // OAuth popup completed — store the token in our DB
+      await nangoConnectedMutation.mutateAsync({ accountId, platform, connectionId });
+      toast.success(`${PLATFORM_LABELS[platform]} connected successfully! Run Sync to pull live metrics.`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes("window_closed") && !msg.includes("user_cancelled")) {
+        toast.error(`OAuth failed: ${msg}`);
       }
-    };
-    window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
-  }, [refetchOAuthStatus]);
+    } finally {
+      setConnectingAccountId(null);
+    }
+  }, [nangoSessionMutation, nangoConnectedMutation]);
 
   const handleSyncOne = (accountId: number) => {
     setSyncStatuses(prev => ({ ...prev, [accountId]: "loading" }));
@@ -216,11 +220,7 @@ export default function Accounts() {
       toast.info(`OAuth for ${PLATFORM_LABELS[platform] ?? platform} is coming soon`);
       return;
     }
-    connectOAuthMutation.mutate({
-      accountId,
-      platform: platform as "twitter" | "linkedin" | "instagram",
-      origin: window.location.origin,
-    });
+    void handleNangoConnect(accountId, platform as "twitter" | "linkedin" | "instagram");
   };
 
   return (
@@ -360,7 +360,7 @@ export default function Accounts() {
             const isSyncing = syncStatus === "loading";
             const isOAuthSupported = OAUTH_PLATFORMS.has(acc.platform);
             const isConnected = oauthStatus?.[acc.id] ?? false;
-            const isConnecting = connectOAuthMutation.isPending;
+            const isConnecting = connectingAccountId === acc.id;
             const isDisconnecting = disconnectMutation.isPending;
 
             return (

@@ -445,3 +445,16 @@
 - [x] Meta/Instagram: META_APP_ID/META_APP_SECRET not yet available — added PRECONDITION_FAILED guard in getOAuthConnectUrl that returns a clear user-facing message instead of a cryptic 500 error
 - [x] Validated: 7 tests in oauth.credentials.test.ts confirm Twitter + LinkedIn credentials are set and non-placeholder; Meta pair is validated as consistently set/unset
 - [x] GitHub push reviewed: 4 critical bug fixes (webhook downgrade, timezone, rate limiting, plan enforcement) merged cleanly — TypeScript 0 errors, 203 tests passing
+
+## Nango OAuth Integration (Single-Click Popup)
+- [x] Install @nangohq/node and @nangohq/frontend SDK packages
+- [x] Configure Twitter (twitter-v2) and LinkedIn integrations in Nango dashboard via API with existing credentials
+- [x] Add getNangoClient() helper to routers.ts using NANGO_SECRET_KEY env var
+- [x] Add getNangoConnectSession tRPC procedure — creates Nango session token scoped to user and integration
+- [x] Add nangoConnected tRPC procedure — retrieves access/refresh token from Nango after popup completes and stores encrypted in DB
+- [x] Update Accounts.tsx: replace getOAuthConnectUrl mutation with Nango frontend SDK popup flow
+- [x] handleNangoConnect: creates session → opens nango.auth() popup → calls nangoConnected to store token
+- [x] Per-account loading state (connectingAccountId) instead of global isPending
+- [x] Graceful handling of user-cancelled popup (window_closed / user_cancelled errors suppressed)
+- [x] 7 new vitest tests for Nango procedures — all 210 tests passing
+- [x] TypeScript: 0 errors, Vite HMR: @nangohq/frontend optimized
