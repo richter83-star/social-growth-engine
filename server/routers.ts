@@ -165,6 +165,12 @@ const accountsRouter = router({
         const url = buildLinkedInAuthUrl({ state, redirectUri });
         return { url };
       } else if (input.platform === "instagram") {
+        if (!process.env.META_APP_ID || !process.env.META_APP_SECRET) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Instagram OAuth is not yet configured. Please add META_APP_ID and META_APP_SECRET in Settings → Secrets.",
+          });
+        }
         const state = createOAuthState({
           accountId: input.accountId,
           userId: ctx.user.id,

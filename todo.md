@@ -437,3 +437,11 @@
 - [x] Update sitemap.xml lastmod for /pricing to 2026-04-05
 - [x] Verified HTTP 200 on dev server
 - [x] TypeScript: 0 errors
+
+## Bug Fixes: Pricing Nav + Accounts OAuth
+- [x] Pricing nav link: already correctly pointed to /pricing in PublicPageLayout — no change needed
+- [x] Twitter/X OAuth credentials: TWITTER_CLIENT_ID + TWITTER_CLIENT_SECRET set via webdev_request_secrets
+- [x] LinkedIn OAuth credentials: LINKEDIN_CLIENT_ID + LINKEDIN_CLIENT_SECRET set via webdev_request_secrets
+- [x] Meta/Instagram: META_APP_ID/META_APP_SECRET not yet available — added PRECONDITION_FAILED guard in getOAuthConnectUrl that returns a clear user-facing message instead of a cryptic 500 error
+- [x] Validated: 7 tests in oauth.credentials.test.ts confirm Twitter + LinkedIn credentials are set and non-placeholder; Meta pair is validated as consistently set/unset
+- [x] GitHub push reviewed: 4 critical bug fixes (webhook downgrade, timezone, rate limiting, plan enforcement) merged cleanly — TypeScript 0 errors, 203 tests passing
