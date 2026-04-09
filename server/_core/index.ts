@@ -10,7 +10,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { initScheduler } from "../scheduler";
 import Stripe from "stripe";
-import { upsertSubscription } from "../db";
+import { upsertSubscription, getSubscriptionByStripeCustomerId, downgradeToFree } from "../db";
 import { notifyOwner } from "./notification";
 import { ensureReferralCoupon, processReferralOnCheckout } from "../referralCredit";
 
@@ -103,6 +103,18 @@ async function startServer() {
       } else if (event.type === "customer.subscription.deleted") {
         const sub = event.data.object as Stripe.Subscription;
         console.log(`[Webhook] Subscription canceled for customer ${sub.customer}`);
+        // Look up user by Stripe customer ID and downgrade to free
+        try {
+          const existingSub = await getSubscriptionByStripeCustomerId(sub.customer as string);
+          if (existingSub) {
+            await downgradeToFree(existingSub.userId);
+            console.log(`[Webhook] Downgraded user ${existingSub.userId} to free plan`);
+          } else {
+            console.warn(`[Webhook] No subscription found for Stripe customer ${sub.customer}`);
+          }
+        } catch (downgradeErr) {
+          console.error("[Webhook] Failed to downgrade user:", downgradeErr);
+        }
         // Notify owner of cancellation
         try {
           await notifyOwner({
@@ -112,7 +124,6 @@ async function startServer() {
         } catch (notifyErr) {
           console.error("[Webhook] Failed to send cancellation notification:", notifyErr);
         }
-        // Downgrade to free — would need to look up userId by customerId in a production system
       }
     } catch (err) {
       console.error("[Webhook] Error processing event:", err);

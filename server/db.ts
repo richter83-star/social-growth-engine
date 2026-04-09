@@ -604,6 +604,26 @@ export async function adminUpdateUserPlan(userId: number, plan: "free" | "pro" |
   await db.update(subscriptions).set({ plan, status: "active", updatedAt: new Date() }).where(eq(subscriptions.userId, userId));
 }
 
+export async function getSubscriptionByStripeCustomerId(stripeCustomerId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(subscriptions).where(eq(subscriptions.stripeCustomerId, stripeCustomerId)).limit(1);
+  return result[0];
+}
+
+export async function downgradeToFree(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.update(subscriptions).set({
+    plan: "free",
+    status: "canceled",
+    stripeSubscriptionId: null,
+    stripePriceId: null,
+    currentPeriodEnd: null,
+    updatedAt: new Date(),
+  }).where(eq(subscriptions.userId, userId));
+}
+
 // --- Churn Reasons -----------------------------------------------------------
 import { churnReasons, InsertChurnReason } from "../drizzle/schema";
 

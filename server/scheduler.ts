@@ -19,18 +19,48 @@ import { runDailyAccountSync } from "./jobs/dailyAccountSync";
 const activeTasks = new Map<number, ReturnType<typeof cron.schedule>>();
 
 /**
- * Compute the next run time for a cron expression (approximate, next minute boundary)
+ * Compute the next run time for a cron expression by scanning minute-by-minute.
+ * Supports 5-part (min hr dom mon dow) and 6-part (sec min hr dom mon dow) formats.
  */
-function computeNextRun(cronExpr: string): Date | null {
+function computeNextRun(cronExpr: string, timezone?: string): Date | null {
+  if (!cron.validate(cronExpr)) return null;
   try {
-    // node-cron doesn't expose next-run natively; approximate with +1 min scan
+    const parts = cronExpr.trim().split(/\s+/);
+    // Normalise to 5-part (min hr dom mon dow), dropping leading seconds field
+    const [min, hr, dom, mon, dow] = parts.length === 6 ? parts.slice(1) : parts;
+
+    const matchField = (field: string, value: number): boolean => {
+      if (field === "*") return true;
+      return field.split(",").some(part => {
+        if (part.includes("/")) {
+          const [range, step] = part.split("/");
+          const start = range === "*" ? 0 : parseInt(range);
+          return value >= start && (value - start) % parseInt(step) === 0;
+        }
+        if (part.includes("-")) {
+          const [lo, hi] = part.split("-").map(Number);
+          return value >= lo && value <= hi;
+        }
+        return parseInt(part) === value;
+      });
+    };
+
+    // Scan up to 1 week ahead in 1-minute steps
     const now = new Date();
-    for (let i = 1; i <= 1440; i++) {
+    for (let i = 1; i <= 10080; i++) {
       const candidate = new Date(now.getTime() + i * 60 * 1000);
-      // Use cron.validate to check expression validity only
-      if (cron.validate(cronExpr)) {
-        // Return approximate next run (1 min from now for simplicity)
-        return new Date(now.getTime() + 60 * 1000);
+      // Evaluate in the target timezone if provided
+      const local = timezone
+        ? new Date(candidate.toLocaleString("en-US", { timeZone: timezone }))
+        : candidate;
+      if (
+        matchField(min, local.getMinutes()) &&
+        matchField(hr, local.getHours()) &&
+        matchField(dom, local.getDate()) &&
+        matchField(mon, local.getMonth() + 1) &&
+        matchField(dow, local.getDay())
+      ) {
+        return candidate;
       }
     }
     return null;
@@ -43,7 +73,7 @@ function computeNextRun(cronExpr: string): Date | null {
  * Run a single scheduled discovery job for a given schedule record.
  * This is the core autonomous loop: discover → optionally auto-generate comments.
  */
-async function runScheduledDiscovery(scheduleId: number, campaignId: number, userId: number) {
+async function runScheduledDiscovery(scheduleId: number, campaignId: number, userId: number, timezone?: string) {
   console.log(`[Scheduler] Running scheduled discovery for schedule=${scheduleId} campaign=${campaignId}`);
   try {
     // Fetch campaign (we need keywords, platforms, persona)
@@ -88,8 +118,12 @@ async function runScheduledDiscovery(scheduleId: number, campaignId: number, use
       totalDiscovered: (campaign.totalDiscovered ?? 0) + savedCount,
     });
 
-    // Update schedule metadata
-    const nextRun = computeNextRun("* * * * *"); // placeholder
+    // Update schedule metadata — recompute next run from the DB record
+    const { getScheduleById } = await import("./db");
+    const scheduleRecord = await getScheduleById(scheduleId, userId);
+    const nextRun = scheduleRecord
+      ? computeNextRun(scheduleRecord.cronExpression, scheduleRecord.timezone ?? undefined)
+      : null;
     await updateSchedule(scheduleId, userId, {
       lastRunAt: new Date(),
       nextRunAt: nextRun ?? undefined,
@@ -129,6 +163,7 @@ export function registerSchedule(schedule: {
   userId: number;
   cronExpression: string;
   isActive: boolean;
+  timezone?: string;
 }) {
   // Remove existing task if any
   stopSchedule(schedule.id);
@@ -140,12 +175,13 @@ export function registerSchedule(schedule: {
     return;
   }
 
+  const tz = schedule.timezone ?? "UTC";
   const task = cron.schedule(schedule.cronExpression, async () => {
     await runScheduledDiscovery(schedule.id, schedule.campaignId, schedule.userId);
-  });
+  }, { timezone: tz });
 
   activeTasks.set(schedule.id, task);
-  console.log(`[Scheduler] Registered schedule ${schedule.id} with cron: ${schedule.cronExpression}`);
+  console.log(`[Scheduler] Registered schedule ${schedule.id} with cron: ${schedule.cronExpression} (tz: ${tz})`);
 }
 
 /**
@@ -175,6 +211,7 @@ export async function initScheduler() {
         userId: s.userId,
         cronExpression: s.cronExpression,
         isActive: s.isActive,
+        timezone: s.timezone ?? undefined,
       });
     }
     console.log(`[Scheduler] Initialized with ${schedules.length} active schedules.`);

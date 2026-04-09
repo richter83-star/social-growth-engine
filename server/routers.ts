@@ -48,8 +48,37 @@ import { getDb } from "./db";
 import Stripe from "stripe";
 import { PLAN_LIMITS, STRIPE_PRICES } from "./products";
 
-// In-memory rate-limit map for syncMyAccounts: userId -> last run timestamp (ms)
-const syncLastRunMap = new Map<number, number>();
+// NOTE: rate limiting for syncMyAccounts is now DB-backed (see syncMyAccounts mutation)
+
+/**
+ * Enforce plan limits after a downgrade.
+ * Pauses campaigns and deactivates schedules that exceed the new plan's caps.
+ */
+async function enforcePlanLimits(userId: number, plan: "free" | "pro" | "agency") {
+  const limits = PLAN_LIMITS[plan];
+
+  const userCampaigns = await getCampaignsByUser(userId);
+  const activeCampaigns = userCampaigns.filter((c) => c.status === "active");
+
+  // Pause campaigns over the limit (keep the oldest N active)
+  if (limits.campaigns !== -1 && activeCampaigns.length > limits.campaigns) {
+    const toDisable = activeCampaigns.slice(limits.campaigns);
+    for (const c of toDisable) {
+      await updateCampaign(c.id, userId, { status: "paused" });
+    }
+    console.log(`[PlanEnforce] Paused ${toDisable.length} campaigns for user ${userId} (downgraded to ${plan})`);
+  }
+
+  // Deactivate all schedules if the new plan doesn't allow scheduling
+  if (limits.schedulesPerCampaign === 0) {
+    const userSchedules = await getSchedulesByUser(userId);
+    for (const s of userSchedules.filter((s) => s.isActive)) {
+      await updateScheduleDb(s.id, userId, { isActive: false });
+      stopSchedule(s.id);
+    }
+    console.log(`[PlanEnforce] Deactivated all schedules for user ${userId} (plan ${plan} has no scheduling)`);
+  }
+}
 
 // --- Accounts Router ----------------------------------------------------------
 const accountsRouter = router({
@@ -323,23 +352,29 @@ const accountsRouter = router({
    * Rate-limited to once per 60 seconds per user (server-side in-memory guard).
    */
   syncMyAccounts: protectedProcedure.mutation(async ({ ctx }) => {
-    // ── Server-side rate limit ────────────────────────────────────────────────
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+
+    // ── DB-backed rate limit ──────────────────────────────────────────────────
     const SYNC_COOLDOWN_MS = 60_000; // 60 seconds
-    const now = Date.now();
-    const lastSyncTime = syncLastRunMap.get(ctx.user.id) ?? 0;
-    const elapsed = now - lastSyncTime;
-    if (elapsed < SYNC_COOLDOWN_MS) {
+    const { performanceMetrics: pmTable } = await import("../drizzle/schema");
+    const { eq: eqOp2, and: andOp2, gte: gteOp, desc: descOp } = await import("drizzle-orm");
+    const cutoff = new Date(Date.now() - SYNC_COOLDOWN_MS);
+    const [recentSync] = await db
+      .select({ createdAt: pmTable.createdAt })
+      .from(pmTable)
+      .where(andOp2(eqOp2(pmTable.userId, ctx.user.id), gteOp(pmTable.createdAt, cutoff)))
+      .orderBy(descOp(pmTable.createdAt))
+      .limit(1);
+    if (recentSync) {
+      const elapsed = Date.now() - recentSync.createdAt.getTime();
       const cooldownSeconds = Math.ceil((SYNC_COOLDOWN_MS - elapsed) / 1000);
       throw new TRPCError({
         code: "TOO_MANY_REQUESTS",
         message: `Please wait ${cooldownSeconds} second${cooldownSeconds !== 1 ? "s" : ""} before syncing again.`,
       });
     }
-    syncLastRunMap.set(ctx.user.id, now);
     // ─────────────────────────────────────────────────────────────────────────
-
-    const db = await getDb();
-    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
 
     const { performanceMetrics } = await import("../drizzle/schema");
     const { eq: eqOp, and: andOp } = await import("drizzle-orm");
@@ -1155,6 +1190,8 @@ const adminRouter = router({
     .input(z.object({ userId: z.number(), plan: z.enum(["free", "pro", "agency"]) }))
     .mutation(async ({ input }) => {
       await adminUpdateUserPlan(input.userId, input.plan);
+      // Enforce new plan limits — pause campaigns and schedules that exceed the new plan
+      await enforcePlanLimits(input.userId, input.plan);
       return { success: true };
     }),
 
