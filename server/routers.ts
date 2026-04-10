@@ -214,7 +214,9 @@ const accountsRouter = router({
       const integrationMap: Record<string, string> = {
         twitter: "twitter-v2",
         linkedin: "linkedin",
-        instagram: "instagram",
+        // instagram-business uses the Facebook provider (Business Login for Instagram)
+        // which supports instagram_basic, pages_show_list, instagram_manage_insights scopes
+        instagram: "instagram-business",
       };
       const integrationId = integrationMap[input.platform];
       if (!integrationId) throw new TRPCError({ code: "BAD_REQUEST", message: "Unsupported platform" });
@@ -248,7 +250,8 @@ const accountsRouter = router({
       const integrationMap: Record<string, string> = {
         twitter: "twitter-v2",
         linkedin: "linkedin",
-        instagram: "instagram",
+        // instagram-business uses the Facebook provider (Business Login for Instagram)
+        instagram: "instagram-business",
       };
       const integrationId = integrationMap[input.platform];
       if (!integrationId) throw new TRPCError({ code: "BAD_REQUEST", message: "Unsupported platform" });

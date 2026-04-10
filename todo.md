@@ -469,15 +469,15 @@
 - [x] All 217 tests passing, TypeScript 0 errors
 
 ## Instagram OAuth - Phase 2 (Configure, Test, UI Improvements)
-- [ ] Verify Nango Instagram integration has correct Meta App credentials via API
-- [ ] Check Meta App redirect URI includes https://api.nango.dev/oauth/callback
-- [ ] Verify Instagram Basic Display product is enabled on Meta App
-- [ ] Test Instagram OAuth popup flow end-to-end (session token → popup → callback → token storage)
-- [ ] Add Instagram connection setup guide/checklist in the UI
-- [ ] Add connection status indicator (connected/error/pending) for Instagram accounts
-- [ ] Add re-authorize button when Instagram token is expired/revoked
-- [ ] Show Instagram-specific scopes and permissions in the connect dialog
-- [ ] Add Instagram setup instructions tooltip/modal for first-time users
+- [x] Verify Nango Instagram integration has correct Meta App credentials via API
+- [x] Check Meta App redirect URI includes https://api.nango.dev/oauth/callback
+- [x] Verify Instagram Basic Display product is enabled on Meta App
+- [x] Test Instagram OAuth popup flow end-to-end (session token → popup → callback → token storage)
+- [x] Add Instagram connection setup guide/checklist in the UI
+- [x] Add connection status indicator (connected/error/pending) for Instagram accounts
+- [x] Add re-authorize button when Instagram token is expired/revoked
+- [x] Show Instagram-specific scopes and permissions in the connect dialog
+- [x] Add Instagram setup instructions tooltip/modal for first-time users
 
 ## Instagram OAuth End-to-End Testing & UI Improvements (Sprint 4)
 - [x] Fix Nango OAuth popup bug: connection_id is forbidden when using session tokens

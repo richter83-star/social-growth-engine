@@ -534,10 +534,11 @@ export default function Accounts() {
                               <div className="space-y-1">
                                 <p className="text-[11px] text-pink-300 font-medium">Instagram setup requirements</p>
                                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                  1. Your account must be a <strong className="text-foreground">Professional</strong> (Business or Creator) account.{" "}
-                                  2. In your <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer" className="text-pink-400 underline underline-offset-2">Meta App</a>, add{" "}
-                                  <code className="text-[10px] bg-muted/60 px-1 py-0.5 rounded font-mono">https://api.nango.dev/oauth/callback</code>{" "}
-                                  as a valid OAuth redirect URI under Instagram Basic Display → Settings.
+                                  1. Your Instagram account must be a <strong className="text-foreground">Professional</strong> (Business or Creator) account.{" "}
+                                  2. In your <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer" className="text-pink-400 underline underline-offset-2">Meta App</a>, go to{" "}
+                                  <strong className="text-foreground">Facebook Login → Settings → Valid OAuth Redirect URIs</strong> and add:{" "}
+                                  <code className="text-[10px] bg-muted/60 px-1 py-0.5 rounded font-mono">https://api.nango.dev/oauth/callback</code>.
+                                  This uses Business Login for Instagram (Facebook OAuth).
                                 </p>
                               </div>
                             </div>
