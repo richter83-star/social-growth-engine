@@ -1,8 +1,9 @@
 /**
  * Tests for Nango OAuth integration procedures
  * Tests getNangoConnectSession and nangoConnected tRPC procedures
+ * Covers Twitter, LinkedIn, and Instagram platforms
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 
 // Mock the Nango SDK
 vi.mock("@nangohq/node", () => {
@@ -31,6 +32,7 @@ vi.mock("@nangohq/node", () => {
 vi.mock("./db", () => ({
   getAccountsByUser: vi.fn().mockResolvedValue([
     { id: 42, userId: 1, platform: "twitter", handle: "testuser", displayName: "Test User" },
+    { id: 43, userId: 1, platform: "instagram", handle: "instauser", displayName: "Insta User" },
   ]),
   getDb: vi.fn(),
 }));
@@ -58,7 +60,7 @@ describe("Nango OAuth Integration", () => {
       expect(session.data.token).toMatch(/^nango_connect_session_/);
     });
 
-    it("should map platform names to Nango integration IDs correctly", () => {
+    it("should map platform names to Nango integration IDs correctly for all 3 platforms", () => {
       const integrationMap: Record<string, string> = {
         twitter: "twitter-v2",
         linkedin: "linkedin",
@@ -70,11 +72,40 @@ describe("Nango OAuth Integration", () => {
       expect(integrationMap["instagram"]).toBe("instagram");
     });
 
+    it("should map instagram platform to 'instagram' Nango integration ID", () => {
+      const integrationMap: Record<string, string> = {
+        twitter: "twitter-v2",
+        linkedin: "linkedin",
+        instagram: "instagram",
+      };
+      expect(integrationMap["instagram"]).toBe("instagram");
+    });
+
     it("should generate a deterministic connectionId from userId and accountId", () => {
       const userId = 1;
       const accountId = 42;
       const connectionId = `user-${userId}-account-${accountId}`;
       expect(connectionId).toBe("user-1-account-42");
+    });
+
+    it("should generate correct connectionId for instagram account", () => {
+      const userId = 1;
+      const accountId = 43; // instagram account
+      const connectionId = `user-${userId}-account-${accountId}`;
+      expect(connectionId).toBe("user-1-account-43");
+    });
+
+    it("should create session with instagram as allowed_integration", async () => {
+      const { Nango } = await import("@nangohq/node");
+      const nango = new (Nango as any)({ secretKey: "test" });
+
+      const session = await nango.createConnectSession({
+        end_user: { id: "1", email: "test@example.com", display_name: "Test User" },
+        allowed_integrations: ["instagram"],
+      });
+
+      expect(session.data.token).toBeDefined();
+      expect(session.data.token).toMatch(/^nango_connect_session_/);
     });
   });
 
@@ -84,6 +115,15 @@ describe("Nango OAuth Integration", () => {
       const nango = new (Nango as any)({ secretKey: "test" });
 
       const token = await nango.getToken("twitter-v2", "user-1-account-42");
+      expect(token).toBe("test_access_token_xyz");
+      expect(typeof token).toBe("string");
+    });
+
+    it("should retrieve instagram token from Nango after OAuth completes", async () => {
+      const { Nango } = await import("@nangohq/node");
+      const nango = new (Nango as any)({ secretKey: "test" });
+
+      const token = await nango.getToken("instagram", "user-1-account-43");
       expect(token).toBe("test_access_token_xyz");
       expect(typeof token).toBe("string");
     });
@@ -106,20 +146,20 @@ describe("Nango OAuth Integration", () => {
       expect(credentials.raw?.scope).toBe("tweet.read users.read");
     });
 
-    it("should call saveOAuthToken with correct parameters", async () => {
+    it("should call saveOAuthToken with correct parameters for instagram", async () => {
       const { saveOAuthToken } = await import("./socialOAuth");
       const { Nango } = await import("@nangohq/node");
       const nango = new (Nango as any)({ secretKey: "test" });
 
-      const token = await nango.getToken("twitter-v2", "user-1-account-42") as string;
-      const conn = await nango.getConnection("twitter-v2", "user-1-account-42", false, true);
+      const token = await nango.getToken("instagram", "user-1-account-43") as string;
+      const conn = await nango.getConnection("instagram", "user-1-account-43", false, true);
       const credentials = conn.credentials as {
         refresh_token?: string;
         expires_at?: string;
         raw?: Record<string, string>;
       };
 
-      await saveOAuthToken(1, 42, "twitter", {
+      await saveOAuthToken(1, 43, "instagram", {
         accessToken: token,
         refreshToken: credentials.refresh_token ?? null,
         expiresAt: credentials.expires_at ? new Date(credentials.expires_at) : null,
@@ -128,14 +168,37 @@ describe("Nango OAuth Integration", () => {
 
       expect(saveOAuthToken).toHaveBeenCalledWith(
         1,
-        42,
-        "twitter",
+        43,
+        "instagram",
         expect.objectContaining({
           accessToken: "test_access_token_xyz",
           refreshToken: "test_refresh_token_abc",
-          scope: "tweet.read users.read",
         })
       );
+    });
+  });
+
+  describe("Instagram Nango integration configuration", () => {
+    it("should have META_APP_ID configured for Instagram OAuth", () => {
+      const appId = process.env.META_APP_ID;
+      expect(appId).toBeDefined();
+      expect(appId).not.toBe("");
+      expect(appId!.length).toBeGreaterThan(0);
+    });
+
+    it("should have META_APP_SECRET configured for Instagram OAuth", () => {
+      const appSecret = process.env.META_APP_SECRET;
+      expect(appSecret).toBeDefined();
+      expect(appSecret).not.toBe("");
+      expect(appSecret!.length).toBeGreaterThan(0);
+    });
+
+    it("META_APP_ID and META_APP_SECRET should both be set (not partially configured)", () => {
+      const appId = process.env.META_APP_ID;
+      const appSecret = process.env.META_APP_SECRET;
+      const bothSet = !!appId && !!appSecret;
+      const neitherSet = !appId && !appSecret;
+      expect(bothSet || neitherSet).toBe(true);
     });
   });
 

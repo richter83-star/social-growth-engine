@@ -458,3 +458,12 @@
 - [x] Graceful handling of user-cancelled popup (window_closed / user_cancelled errors suppressed)
 - [x] 7 new vitest tests for Nango procedures — all 210 tests passing
 - [x] TypeScript: 0 errors, Vite HMR: @nangohq/frontend optimized
+
+## Instagram OAuth via Nango
+- [x] Validate Meta App credentials (META_APP_ID / META_APP_SECRET) via Graph API — SocialGrowth app confirmed
+- [x] Create Instagram integration in Nango dashboard via API (provider: instagram, unique_key: instagram)
+- [x] Backend getNangoConnectSession already includes instagram in platform enum and integration map
+- [x] Backend nangoConnected already handles instagram platform token storage
+- [x] Frontend OAUTH_PLATFORMS set already includes instagram
+- [x] 7 new Instagram-specific vitest tests added to nango.test.ts
+- [x] All 217 tests passing, TypeScript 0 errors
