@@ -230,7 +230,8 @@ const accountsRouter = router({
       return {
         sessionToken: session.data.token,
         integrationId,
-        connectionId: `user-${ctx.user.id}-account-${input.accountId}`,
+        // connectionId is NOT returned here — with session tokens, Nango auto-generates
+        // the connectionId and returns it in the nango.auth() AuthSuccess result on the frontend.
       };
     }),
   // Nango: called after OAuth popup succeeds to store token in our DB

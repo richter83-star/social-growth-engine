@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import {
   Users, Plus, Trash2, RefreshCw, Twitter, Linkedin,
   CheckCircle2, AlertCircle, Clock, Link2, Unlink, ShieldCheck,
+  Info, RotateCcw, Loader2,
 } from "lucide-react";
 
 type Platform = "twitter" | "reddit" | "linkedin" | "instagram" | "tiktok";
@@ -185,16 +186,40 @@ export default function Accounts() {
   const handleNangoConnect = useCallback(async (accountId: number, platform: "twitter" | "linkedin" | "instagram") => {
     setConnectingAccountId(accountId);
     try {
-      const { sessionToken, integrationId, connectionId } = await nangoSessionMutation.mutateAsync({ accountId, platform });
+      const { sessionToken, integrationId } = await nangoSessionMutation.mutateAsync({ accountId, platform });
       const nango = new Nango({ connectSessionToken: sessionToken });
-      await nango.auth(integrationId, connectionId);
+      // With session tokens, do NOT pass connectionId to nango.auth() — Nango forbids it.
+      // The actual connectionId is returned in the AuthSuccess result.
+      const result = await nango.auth(integrationId);
+      const actualConnectionId = result.connectionId;
       // OAuth popup completed — store the token in our DB
-      await nangoConnectedMutation.mutateAsync({ accountId, platform, connectionId });
+      await nangoConnectedMutation.mutateAsync({ accountId, platform, connectionId: actualConnectionId });
       toast.success(`${PLATFORM_LABELS[platform]} connected successfully! Run Sync to pull live metrics.`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (!msg.includes("window_closed") && !msg.includes("user_cancelled")) {
         toast.error(`OAuth failed: ${msg}`);
+      }
+    } finally {
+      setConnectingAccountId(null);
+    }
+  }, [nangoSessionMutation, nangoConnectedMutation]);
+
+  // Nango re-authorize handler — reconnects an existing connection (e.g. after token revocation)
+  const handleNangoReconnect = useCallback(async (accountId: number, platform: "twitter" | "linkedin" | "instagram") => {
+    setConnectingAccountId(accountId);
+    try {
+      const { sessionToken, integrationId } = await nangoSessionMutation.mutateAsync({ accountId, platform });
+      const nango = new Nango({ connectSessionToken: sessionToken });
+      // reconnect() re-authorizes without creating a new connection
+      const result = await nango.reconnect(integrationId);
+      const actualConnectionId = result.connectionId;
+      await nangoConnectedMutation.mutateAsync({ accountId, platform, connectionId: actualConnectionId });
+      toast.success(`${PLATFORM_LABELS[platform]} re-authorized successfully!`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes("window_closed") && !msg.includes("user_cancelled")) {
+        toast.error(`Re-authorization failed: ${msg}`);
       }
     } finally {
       setConnectingAccountId(null);
@@ -438,47 +463,85 @@ export default function Accounts() {
 
                   {/* OAuth Connect / Disconnect row */}
                   {isOAuthSupported && (
-                    <div className="mt-3 pt-3 border-t border-border/50">
+                    <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
                       {isConnected ? (
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1.5">
                             <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
                             <span className="text-xs text-emerald-400 font-medium">OAuth connected</span>
-                            <span className="text-xs text-muted-foreground">— private metrics active</span>
+                            <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-emerald-500/30 text-emerald-400 bg-emerald-500/10">
+                              via Nango
+                            </Badge>
                           </div>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-1"
-                                disabled={isDisconnecting}
-                                onClick={() => disconnectMutation.mutate({ accountId: acc.id })}
-                              >
-                                <Unlink className="h-3 w-3" />
-                                Disconnect
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="text-xs">Remove stored OAuth token</p>
-                            </TooltipContent>
-                          </Tooltip>
+                          <div className="flex items-center gap-1">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-xs text-muted-foreground hover:text-primary hover:bg-primary/10 gap-1"
+                                  disabled={isConnecting}
+                                  onClick={() => handleNangoReconnect(acc.id, acc.platform as "twitter" | "linkedin" | "instagram")}
+                                >
+                                  {isConnecting ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                                  Re-auth
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">Re-authorize if token was revoked or expired</p>
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-1"
+                                  disabled={isDisconnecting}
+                                  onClick={() => disconnectMutation.mutate({ accountId: acc.id })}
+                                >
+                                  <Unlink className="h-3 w-3" />
+                                  Disconnect
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">Remove stored OAuth token</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
                         </div>
                       ) : (
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground">
-                            Connect OAuth to unlock private metrics
-                          </span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 px-3 text-xs gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
-                            disabled={isConnecting}
-                            onClick={() => handleConnect(acc.id, acc.platform)}
-                          >
-                            <Link2 className="h-3 w-3" />
-                            Connect {PLATFORM_LABELS[acc.platform]}
-                          </Button>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground">
+                              Connect OAuth to unlock private metrics
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-3 text-xs gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
+                              disabled={isConnecting}
+                              onClick={() => handleConnect(acc.id, acc.platform)}
+                            >
+                              {isConnecting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />}
+                              {isConnecting ? "Opening..." : `Connect ${PLATFORM_LABELS[acc.platform]}`}
+                            </Button>
+                          </div>
+                          {/* Instagram-specific setup guide */}
+                          {acc.platform === "instagram" && (
+                            <div className="flex items-start gap-1.5 p-2 rounded-md bg-pink-500/5 border border-pink-500/15">
+                              <Info className="h-3.5 w-3.5 text-pink-400 mt-0.5 shrink-0" />
+                              <div className="space-y-1">
+                                <p className="text-[11px] text-pink-300 font-medium">Instagram setup requirements</p>
+                                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                  1. Your account must be a <strong className="text-foreground">Professional</strong> (Business or Creator) account.{" "}
+                                  2. In your <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer" className="text-pink-400 underline underline-offset-2">Meta App</a>, add{" "}
+                                  <code className="text-[10px] bg-muted/60 px-1 py-0.5 rounded font-mono">https://api.nango.dev/oauth/callback</code>{" "}
+                                  as a valid OAuth redirect URI under Instagram Basic Display → Settings.
+                                </p>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
