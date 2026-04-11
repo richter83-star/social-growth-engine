@@ -48,6 +48,7 @@ export type StoredToken = {
   refreshToken: string | null;
   expiresAt: Date | null;
   scope: string | null;
+  nangoConnectionId?: string | null;  // Nango connection ID for managed token refresh
 };
 
 export async function saveOAuthToken(
@@ -70,6 +71,7 @@ export async function saveOAuthToken(
     refreshToken: token.refreshToken ? encryptToken(token.refreshToken) : null,
     expiresAt: token.expiresAt ?? null,
     scope: token.scope ?? null,
+    nangoConnectionId: token.nangoConnectionId ?? null,
     updatedAt: new Date(),
   };
 
@@ -110,6 +112,7 @@ export async function getOAuthToken(
     refreshToken: row.refreshToken ? decryptToken(row.refreshToken) : null,
     expiresAt: row.expiresAt ?? null,
     scope: row.scope ?? null,
+    nangoConnectionId: row.nangoConnectionId ?? null,
   };
 }
 

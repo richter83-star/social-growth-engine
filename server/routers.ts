@@ -271,6 +271,7 @@ const accountsRouter = router({
         refreshToken: credentials.refresh_token ?? null,
         expiresAt,
         scope,
+        nangoConnectionId: input.connectionId,  // Store Nango connection ID for future refresh
       });
       return { success: true };
     }),
@@ -398,16 +399,37 @@ const accountsRouter = router({
             results.push({ id: account.id, platform: account.platform, handle: account.handle, status: "success", displayName, error: "Follower count not available via LinkedIn API" });
 
           } else if (account.platform === "instagram") {
-            // Instagram requires OAuth — no public API available
-            const oauthToken = await getOAuthToken(ctx.user.id, account.id);
+            // Instagram requires OAuth — uses Business Login for Instagram via Nango
+            let oauthToken = await getOAuthToken(ctx.user.id, account.id);
             if (!oauthToken) {
               await updateAccount(account.id, ctx.user.id, { lastSynced: new Date() });
               results.push({ id: account.id, platform: account.platform, handle: account.handle, status: "not_supported", error: "Connect your Instagram account to sync metrics" });
               continue;
             }
+            // If token is expired and we have a Nango connection ID, refresh via Nango
+            const isExpired = oauthToken.expiresAt && oauthToken.expiresAt < new Date();
+            if (isExpired && oauthToken.nangoConnectionId) {
+              try {
+                const nango = getNangoClient();
+                const freshToken = await nango.getToken("instagram-business", oauthToken.nangoConnectionId);
+                if (freshToken && typeof freshToken === "string") {
+                  const conn = await nango.getConnection("instagram-business", oauthToken.nangoConnectionId, false, true);
+                  const creds = conn.credentials as { access_token?: string; refresh_token?: string; expires_at?: string };
+                  const newExpiresAt = creds.expires_at ? new Date(creds.expires_at) : null;
+                  await (await import("./socialOAuth")).saveOAuthToken(ctx.user.id, account.id, "instagram", {
+                    accessToken: freshToken,
+                    refreshToken: creds.refresh_token ?? oauthToken.refreshToken,
+                    expiresAt: newExpiresAt,
+                    scope: oauthToken.scope,
+                    nangoConnectionId: oauthToken.nangoConnectionId,
+                  });
+                  oauthToken = { ...oauthToken, accessToken: freshToken, expiresAt: newExpiresAt };
+                }
+              } catch { /* fall through with existing token */ }
+            }
             const igMetrics = await fetchInstagramMetricsWithToken(oauthToken.accessToken);
             if (!igMetrics) {
-              results.push({ id: account.id, platform: account.platform, handle: account.handle, status: "error", error: "Could not fetch Instagram metrics. Ensure account is a Professional (Business/Creator) account." });
+              results.push({ id: account.id, platform: account.platform, handle: account.handle, status: "error", error: "Could not fetch Instagram metrics. Ensure account is a Professional (Business/Creator) account connected via Facebook Login." });
               continue;
             }
             await updateAccount(account.id, ctx.user.id, { followers: igMetrics.followers, lastSynced: new Date() });
@@ -509,8 +531,29 @@ const accountsRouter = router({
           }
 
         } else if (account.platform === "instagram") {
-          const oauthToken = await getOAuthToken(ctx.user.id, account.id);
+          let oauthToken = await getOAuthToken(ctx.user.id, account.id);
           if (oauthToken) {
+            // If token is expired and we have a Nango connection ID, refresh via Nango
+            const isExpired = oauthToken.expiresAt && oauthToken.expiresAt < new Date();
+            if (isExpired && oauthToken.nangoConnectionId) {
+              try {
+                const nango = getNangoClient();
+                const freshToken = await nango.getToken("instagram-business", oauthToken.nangoConnectionId);
+                if (freshToken && typeof freshToken === "string") {
+                  const conn = await nango.getConnection("instagram-business", oauthToken.nangoConnectionId, false, true);
+                  const creds = conn.credentials as { access_token?: string; refresh_token?: string; expires_at?: string };
+                  const newExpiresAt = creds.expires_at ? new Date(creds.expires_at) : null;
+                  await (await import("./socialOAuth")).saveOAuthToken(ctx.user.id, account.id, "instagram", {
+                    accessToken: freshToken,
+                    refreshToken: creds.refresh_token ?? oauthToken.refreshToken,
+                    expiresAt: newExpiresAt,
+                    scope: oauthToken.scope,
+                    nangoConnectionId: oauthToken.nangoConnectionId,
+                  });
+                  oauthToken = { ...oauthToken, accessToken: freshToken, expiresAt: newExpiresAt };
+                }
+              } catch { /* fall through with existing token */ }
+            }
             const igMetrics = await fetchInstagramMetricsWithToken(oauthToken.accessToken);
             if (igMetrics) {
               await updateAccount(account.id, ctx.user.id, { followers: igMetrics.followers, lastSynced: new Date() });

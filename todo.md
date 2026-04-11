@@ -490,3 +490,15 @@
 - [x] Add Instagram-specific setup guide (Professional account + Nango redirect URI)
 - [x] Run 10/10 end-to-end Instagram OAuth tests (all pass)
 - [x] Run full test suite: 217/217 tests pass
+
+## Instagram Graph API Sync & Meta App Setup
+- [ ] Update syncStats procedure Instagram branch to call Graph API using Nango token
+- [ ] Add Facebook Login product to Meta App
+
+## Instagram Sync & Meta App Setup (Sprint 4)
+- [x] Update syncStats Instagram branch to use Nango token for Graph API calls
+- [x] Add Nango token refresh logic (auto-refresh expired tokens via Nango)
+- [x] Add nangoConnectionId column to oauthTokens schema and run migration
+- [x] Store nangoConnectionId when saving OAuth token after Nango connect
+- [ ] Add Facebook Login product to Meta App (manual step - requires Facebook login)
+- [ ] Add https://api.nango.dev/oauth/callback to Valid OAuth Redirect URIs in Meta App

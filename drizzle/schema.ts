@@ -266,6 +266,7 @@ export const oauthTokens = mysqlTable("oauth_tokens", {
   tokenType: varchar("tokenType", { length: 32 }).default("Bearer").notNull(),
   scope: text("scope"),
   expiresAt: timestamp("expiresAt"),                // null = non-expiring
+  nangoConnectionId: varchar("nangoConnectionId", { length: 256 }),  // Nango connection ID for managed token refresh
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
