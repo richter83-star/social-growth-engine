@@ -116,6 +116,32 @@ export async function getOAuthToken(
   };
 }
 
+// Look up a token by userId + platform (for discovery, where accountId is not known)
+export async function getOAuthTokenByPlatform(
+  userId: number,
+  platform: string
+): Promise<StoredToken | null> {
+  const db = await getDb();
+  if (!db) return null;
+
+  const rows = await db
+    .select()
+    .from(oauthTokens)
+    .where(and(eq(oauthTokens.userId, userId), eq(oauthTokens.platform, platform as "twitter" | "reddit" | "linkedin" | "instagram" | "tiktok")))
+    .limit(1);
+
+  if (rows.length === 0) return null;
+  const row = rows[0];
+
+  return {
+    accessToken: decryptToken(row.accessToken),
+    refreshToken: row.refreshToken ? decryptToken(row.refreshToken) : null,
+    expiresAt: row.expiresAt ?? null,
+    scope: row.scope ?? null,
+    nangoConnectionId: row.nangoConnectionId ?? null,
+  };
+}
+
 export async function deleteOAuthToken(userId: number, accountId: number): Promise<void> {
   const db = await getDb();
   if (!db) return;

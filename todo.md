@@ -502,3 +502,14 @@
 - [x] Store nangoConnectionId when saving OAuth token after Nango connect
 - [ ] Add Facebook Login product to Meta App (manual step - requires Facebook login)
 - [ ] Add https://api.nango.dev/oauth/callback to Valid OAuth Redirect URIs in Meta App
+
+## Live Data & Agency Tier Sprint (Completed)
+- [x] Upgrade owner account to Agency tier in database
+- [x] Replace LLM-simulated Reddit discovery with real Reddit JSON API calls
+- [x] Add real Twitter thread discovery via stored OAuth token (Twitter API v2)
+- [x] Rewrite instagramMcp.ts to use Instagram Graph API (remove execSync/manus-mcp-cli)
+- [x] Update instagramMcpRouter to pass access token from stored OAuth token
+- [x] Add getOAuthTokenByPlatform helper to socialOAuth.ts
+- [x] Add nangoConnectionId column to oauthTokens table (migration applied)
+- [x] Store nangoConnectionId in nangoConnected procedure
+- [x] Add Nango token refresh to syncStats Instagram branches

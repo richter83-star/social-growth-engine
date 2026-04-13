@@ -1,16 +1,12 @@
 /**
- * Instagram MCP Integration
+ * Instagram Graph API Integration
  *
- * Uses the manus-mcp-cli to call the connected Instagram MCP server.
- * This gives direct access to the owner's Instagram Business account
- * without requiring a Meta developer app.
+ * Fetches Instagram Business account data via the Graph API using
+ * the OAuth token stored by the Nango integration (instagram-business).
  *
- * For multi-user service: each user would need their own Meta OAuth flow
- * (META_APP_ID / META_APP_SECRET). This module handles the owner's account.
+ * This replaces the previous manus-mcp-cli approach which only worked
+ * in the local sandbox environment.
  */
-
-import { execSync } from "child_process";
-import fs from "fs";
 
 export type InstagramAccountInfo = {
   username: string;
@@ -40,188 +36,125 @@ export type InstagramPostInsights = {
   shares?: number;
 };
 
-/**
- * Fetch the connected Instagram account's profile info via MCP.
- */
-export async function getInstagramAccountInfo(): Promise<InstagramAccountInfo | null> {
-  try {
-    const result = execSync(
-      `manus-mcp-cli tool call get_account_info --server instagram --input '{}'`,
-      { encoding: "utf8", timeout: 30000, stdio: ["pipe", "pipe", "pipe"] }
-    );
-
-    // The result is saved to a file; find the path
-    const match = result.match(/MCP tool invocation result saved to:\s*(\S+)/);
-    if (!match) return null;
-
-    const filePath = match[1];
-    if (!fs.existsSync(filePath)) return null;
-
-    const raw = JSON.parse(fs.readFileSync(filePath, "utf8"));
-
-    // Parse the MCP response — it returns structured data
-    if (raw?.content) {
-      // Content is an array of text blocks
-      const textBlock = Array.isArray(raw.content)
-        ? raw.content.find((c: { type: string }) => c.type === "text")
-        : null;
-
-      if (textBlock?.text) {
-        return parseAccountInfoText(textBlock.text);
-      }
-    }
-
-    return null;
-  } catch (err) {
-    console.error("[InstagramMCP] getAccountInfo error:", err);
-    return null;
-  }
-}
+const GRAPH_API = "https://graph.facebook.com/v22.0";
 
 /**
- * Fetch recent posts from the connected Instagram account.
+ * Fetch the Instagram Business account info for a given access token.
+ * Uses the Facebook Graph API: /me/accounts → instagram_business_account
  */
-export async function getInstagramPosts(limit = 10): Promise<InstagramPost[]> {
+export async function getInstagramAccountInfo(accessToken?: string): Promise<InstagramAccountInfo | null> {
+  if (!accessToken) return null;
+
   try {
-    const result = execSync(
-      `manus-mcp-cli tool call get_post_list --server instagram --input '{"limit":${Math.min(limit, 20)}}'`,
-      { encoding: "utf8", timeout: 30000, stdio: ["pipe", "pipe", "pipe"] }
+    // Step 1: Get the Facebook Page linked to this token
+    const pagesRes = await fetch(
+      `${GRAPH_API}/me/accounts?fields=id,name,instagram_business_account&access_token=${accessToken}`
     );
+    if (!pagesRes.ok) return null;
+    const pagesData = await pagesRes.json() as { data?: Array<{ id: string; name: string; instagram_business_account?: { id: string } }> };
 
-    const match = result.match(/MCP tool invocation result saved to:\s*(\S+)/);
-    if (!match) return [];
+    const page = pagesData.data?.find(p => p.instagram_business_account);
+    if (!page?.instagram_business_account) return null;
 
-    const filePath = match[1];
-    if (!fs.existsSync(filePath)) return [];
+    const igId = page.instagram_business_account.id;
 
-    const raw = JSON.parse(fs.readFileSync(filePath, "utf8"));
-
-    if (raw?.content) {
-      const textBlock = Array.isArray(raw.content)
-        ? raw.content.find((c: { type: string }) => c.type === "text")
-        : null;
-
-      if (textBlock?.text) {
-        return parsePostListText(textBlock.text);
-      }
-    }
-
-    return [];
-  } catch (err) {
-    console.error("[InstagramMCP] getPostList error:", err);
-    return [];
-  }
-}
-
-/**
- * Fetch insights for a specific post.
- */
-export async function getInstagramPostInsights(postId: string): Promise<InstagramPostInsights | null> {
-  try {
-    const result = execSync(
-      `manus-mcp-cli tool call get_post_insights --server instagram --input '{"post_id":"${postId}"}'`,
-      { encoding: "utf8", timeout: 30000, stdio: ["pipe", "pipe", "pipe"] }
+    // Step 2: Get Instagram Business account details
+    const igRes = await fetch(
+      `${GRAPH_API}/${igId}?fields=username,name,followers_count,follows_count,media_count,profile_picture_url&access_token=${accessToken}`
     );
-
-    const match = result.match(/MCP tool invocation result saved to:\s*(\S+)/);
-    if (!match) return null;
-
-    const filePath = match[1];
-    if (!fs.existsSync(filePath)) return null;
-
-    const raw = JSON.parse(fs.readFileSync(filePath, "utf8"));
-
-    if (raw?.content) {
-      const textBlock = Array.isArray(raw.content)
-        ? raw.content.find((c: { type: string }) => c.type === "text")
-        : null;
-
-      if (textBlock?.text) {
-        return parsePostInsightsText(textBlock.text, postId);
-      }
-    }
-
-    return null;
-  } catch (err) {
-    console.error("[InstagramMCP] getPostInsights error:", err);
-    return null;
-  }
-}
-
-// ─── Text parsers ──────────────────────────────────────────────────────────
-
-function parseAccountInfoText(text: string): InstagramAccountInfo | null {
-  // Expected format:
-  // Instagram Account Info
-  // Username: @friedfeeds1
-  // Name: FriedFeeds
-  // Followers: 0
-  // Following: 0
-  // Posts: 0
-  // Profile Picture: https://...
-
-  const lines = text.split("\n").map((l) => l.trim());
-  const get = (key: string): string => {
-    const line = lines.find((l) => l.toLowerCase().startsWith(key.toLowerCase() + ":"));
-    return line ? line.slice(key.length + 1).trim() : "";
-  };
-
-  const username = get("Username").replace(/^@/, "");
-  const name = get("Name");
-  const followers = parseInt(get("Followers"), 10) || 0;
-  const following = parseInt(get("Following"), 10) || 0;
-  const posts = parseInt(get("Posts"), 10) || 0;
-  const profilePicture = get("Profile Picture") || undefined;
-
-  if (!username) return null;
-
-  return { username, name, followers, following, posts, profilePicture };
-}
-
-function parsePostListText(text: string): InstagramPost[] {
-  if (text.toLowerCase().includes("no posts found")) return [];
-
-  // Try to parse structured post entries
-  const posts: InstagramPost[] = [];
-  const blocks = text.split(/\n\s*\n/).filter(Boolean);
-
-  for (const block of blocks) {
-    const lines = block.split("\n").map((l) => l.trim());
-    const get = (key: string): string => {
-      const line = lines.find((l) => l.toLowerCase().startsWith(key.toLowerCase() + ":"));
-      return line ? line.slice(key.length + 1).trim() : "";
+    if (!igRes.ok) return null;
+    const ig = await igRes.json() as {
+      username?: string;
+      name?: string;
+      followers_count?: number;
+      follows_count?: number;
+      media_count?: number;
+      profile_picture_url?: string;
     };
 
-    const id = get("ID") || get("Post ID") || get("Id");
-    const type = get("Type") || "post";
-    const timestamp = get("Timestamp") || get("Date") || undefined;
-    const caption = get("Caption") || undefined;
-    const permalink = get("Permalink") || get("URL") || undefined;
-
-    if (id) {
-      posts.push({ id, type, timestamp, caption, permalink });
-    }
+    return {
+      username: ig.username ?? "",
+      name: ig.name ?? ig.username ?? "",
+      followers: ig.followers_count ?? 0,
+      following: ig.follows_count ?? 0,
+      posts: ig.media_count ?? 0,
+      profilePicture: ig.profile_picture_url,
+    };
+  } catch (err) {
+    console.error("[InstagramGraph] getAccountInfo error:", err);
+    return null;
   }
-
-  return posts;
 }
 
-function parsePostInsightsText(text: string, postId: string): InstagramPostInsights | null {
-  const lines = text.split("\n").map((l) => l.trim());
-  const get = (key: string): number | undefined => {
-    const line = lines.find((l) => l.toLowerCase().startsWith(key.toLowerCase() + ":"));
-    if (!line) return undefined;
-    const val = parseInt(line.slice(key.length + 1).trim(), 10);
-    return isNaN(val) ? undefined : val;
-  };
+/**
+ * Fetch recent posts from the connected Instagram Business account.
+ */
+export async function getInstagramPosts(limit = 10, accessToken?: string): Promise<InstagramPost[]> {
+  if (!accessToken) return [];
 
-  return {
-    postId,
-    likes: get("Likes"),
-    comments: get("Comments"),
-    reach: get("Reach"),
-    impressions: get("Impressions"),
-    saved: get("Saved"),
-    shares: get("Shares"),
-  };
+  try {
+    // Get the Instagram Business account ID first
+    const pagesRes = await fetch(
+      `${GRAPH_API}/me/accounts?fields=id,instagram_business_account&access_token=${accessToken}`
+    );
+    if (!pagesRes.ok) return [];
+    const pagesData = await pagesRes.json() as { data?: Array<{ id: string; instagram_business_account?: { id: string } }> };
+
+    const page = pagesData.data?.find(p => p.instagram_business_account);
+    if (!page?.instagram_business_account) return [];
+
+    const igId = page.instagram_business_account.id;
+
+    // Fetch media
+    const mediaRes = await fetch(
+      `${GRAPH_API}/${igId}/media?fields=id,media_type,timestamp,caption,permalink,thumbnail_url&limit=${Math.min(limit, 20)}&access_token=${accessToken}`
+    );
+    if (!mediaRes.ok) return [];
+    const mediaData = await mediaRes.json() as { data?: Array<{ id: string; media_type?: string; timestamp?: string; caption?: string; permalink?: string; thumbnail_url?: string }> };
+
+    return (mediaData.data ?? []).map(m => ({
+      id: m.id,
+      type: m.media_type ?? "IMAGE",
+      timestamp: m.timestamp,
+      caption: m.caption,
+      permalink: m.permalink,
+      thumbnailUrl: m.thumbnail_url,
+    }));
+  } catch (err) {
+    console.error("[InstagramGraph] getPosts error:", err);
+    return [];
+  }
+}
+
+/**
+ * Fetch insights for a specific Instagram post.
+ */
+export async function getInstagramPostInsights(postId: string, accessToken?: string): Promise<InstagramPostInsights | null> {
+  if (!accessToken) return null;
+
+  try {
+    const res = await fetch(
+      `${GRAPH_API}/${postId}/insights?metric=likes,comments,reach,impressions,saved,shares&access_token=${accessToken}`
+    );
+    if (!res.ok) return null;
+    const data = await res.json() as { data?: Array<{ name: string; values?: Array<{ value: number }> }> };
+
+    const getMetric = (name: string): number | undefined => {
+      const metric = data.data?.find(m => m.name === name);
+      return metric?.values?.[0]?.value;
+    };
+
+    return {
+      postId,
+      likes: getMetric("likes"),
+      comments: getMetric("comments"),
+      reach: getMetric("reach"),
+      impressions: getMetric("impressions"),
+      saved: getMetric("saved"),
+      shares: getMetric("shares"),
+    };
+  } catch (err) {
+    console.error("[InstagramGraph] getPostInsights error:", err);
+    return null;
+  }
 }

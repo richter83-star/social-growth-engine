@@ -26,7 +26,7 @@ import { notifyOwner } from "./_core/notification";
 import {
   buildTwitterAuthUrl, buildLinkedInAuthUrl, buildInstagramAuthUrl,
   createOAuthState, generatePKCE,
-  getOAuthToken, deleteOAuthToken, getOAuthStatusForAccounts,
+  getOAuthToken, getOAuthTokenByPlatform, deleteOAuthToken, getOAuthStatusForAccounts,
   fetchTwitterMetricsWithToken, fetchLinkedInProfileWithToken, fetchInstagramMetricsWithToken,
   refreshTwitterToken,
 } from "./socialOAuth";
@@ -685,7 +685,8 @@ const discoveryRouter = router({
         campaign.keywords as string[],
         campaign.platforms as string[],
         campaign.name,
-        8
+        8,
+        ctx.user.id
       );
 
       const saved = [];
@@ -1345,22 +1346,25 @@ const adminRouter = router({
   }),
 });
 
-// --- Instagram MCP Router (owner's connected account) ----------------------
+// --- Instagram MCP Router (owner's connected account via Graph API) ----------
 const instagramMcpRouter = router({
-  accountInfo: protectedProcedure.query(async () => {
-    return getInstagramAccountInfo();
+  accountInfo: protectedProcedure.query(async ({ ctx }) => {
+    const token = await getOAuthTokenByPlatform(ctx.user.id, "instagram");
+    return getInstagramAccountInfo(token?.accessToken);
   }),
 
   posts: protectedProcedure
     .input(z.object({ limit: z.number().min(5).max(20).default(10) }))
-    .query(async ({ input }) => {
-      return getInstagramPosts(input.limit);
+    .query(async ({ ctx, input }) => {
+      const token = await getOAuthTokenByPlatform(ctx.user.id, "instagram");
+      return getInstagramPosts(input.limit, token?.accessToken);
     }),
 
   postInsights: protectedProcedure
     .input(z.object({ postId: z.string() }))
-    .query(async ({ input }) => {
-      return getInstagramPostInsights(input.postId);
+    .query(async ({ ctx, input }) => {
+      const token = await getOAuthTokenByPlatform(ctx.user.id, "instagram");
+      return getInstagramPostInsights(input.postId, token?.accessToken);
     }),
 });
 
