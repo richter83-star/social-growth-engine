@@ -65,6 +65,13 @@ vi.mock("./db", () => ({
   saveChurnReason: vi.fn(),
   getChurnReasonBreakdown: vi.fn(),
   resolvePermissions: vi.fn(),
+  // Instagram credential helpers
+  saveInstagramCredentials: vi.fn(),
+  getInstagramCredentials: vi.fn().mockResolvedValue(null),
+  deleteInstagramCredentials: vi.fn(),
+  updateInstagramCredentialStatus: vi.fn(),
+  decryptValue: vi.fn((s: string) => s),
+  getInstagramCredentialsByUserId: vi.fn().mockResolvedValue([]),
 }));
 
 // ---- Mock other heavy deps ----------------------------------------------
@@ -103,6 +110,15 @@ vi.mock("./instagramMcp", () => ({
   getInstagramAccountInfo: vi.fn().mockResolvedValue(null),
   getInstagramPosts: vi.fn().mockResolvedValue([]),
   getInstagramPostInsights: vi.fn().mockResolvedValue(null),
+}));
+// Mock instagrapiClient so tests don't hit the Python service
+vi.mock("./instagrapiClient", () => ({
+  isInstagrapiAvailable: vi.fn().mockResolvedValue(false),
+  instaLogin: vi.fn().mockResolvedValue({ success: false, username: "", requires_2fa: false, message: "mocked" }),
+  instaLogout: vi.fn().mockResolvedValue({ success: true }),
+  instaGetUserInfo: vi.fn().mockResolvedValue(null),
+  instaGetUserPosts: vi.fn().mockResolvedValue([]),
+  instaGetMediaInsights: vi.fn().mockResolvedValue(null),
 }));
 
 import { callDataApi } from "./_core/dataApi";

@@ -74,12 +74,16 @@ export default function InstagramPanel() {
             <div>
               <CardTitle className="text-base font-semibold text-foreground flex items-center gap-2">
                 Instagram — Live Stats
-                <Badge className="text-[10px] px-1.5 py-0 bg-pink-500/20 text-pink-300 border-0">MCP Connected</Badge>
+                {accountInfo && (
+                  <Badge className="text-[10px] px-1.5 py-0 bg-pink-500/20 text-pink-300 border-0">
+                    {(accountInfo as { source?: string }).source === "instagrapi" ? "Private API" : "Graph API"}
+                  </Badge>
+                )}
               </CardTitle>
               {accountInfo ? (
                 <p className="text-xs text-muted-foreground">@{accountInfo.username} · {accountInfo.name}</p>
               ) : (
-                <p className="text-xs text-muted-foreground">FriedFeeds creator account</p>
+                <p className="text-xs text-muted-foreground">Connect an Instagram account to see live stats</p>
               )}
             </div>
           </div>
@@ -246,7 +250,9 @@ export default function InstagramPanel() {
 
         <div className="pt-1 border-t border-border/50">
           <p className="text-[10px] text-muted-foreground">
-            Connected via MCP · @friedfeeds1 · Data refreshes on demand
+            {accountInfo
+              ? `Connected via ${(accountInfo as { source?: string }).source === "instagrapi" ? "Private API" : "Instagram Graph API"} · Data refreshes on demand`
+              : "Add Instagram credentials on an account card to enable live stats"}
           </p>
         </div>
       </CardContent>

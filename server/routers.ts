@@ -33,6 +33,13 @@ import {
 import { registerSchedule, stopSchedule, triggerScheduleNow } from "./scheduler";
 import { getInstagramAccountInfo, getInstagramPosts, getInstagramPostInsights } from "./instagramMcp";
 import {
+  saveInstagramCredentials, getInstagramCredentials, deleteInstagramCredentials,
+  updateInstagramCredentialStatus, decryptValue,
+} from "./db";
+import {
+  isInstagrapiAvailable, instaLogin, instaLogout, instaGetUserInfo, instaGetUserPosts, instaGetMediaInsights,
+} from "./instagrapiClient";
+import {
   getSchedulesByUser, createSchedule, updateSchedule as updateScheduleDb, deleteSchedule as deleteScheduleDb,
 } from "./db";
 import {
@@ -201,6 +208,76 @@ const accountsRouter = router({
       await deleteOAuthToken(ctx.user.id, input.accountId);
       return { success: true };
     }),
+  // Instagram private API credentials (for instagrapi microservice)
+  saveInstagramCredentials: protectedProcedure
+    .input(z.object({
+      accountId: z.number(),
+      username: z.string().min(1).max(128),
+      password: z.string().min(1),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const accounts = await getAccountsByUser(ctx.user.id);
+      const account = accounts.find(a => a.id === input.accountId);
+      if (!account) throw new TRPCError({ code: "NOT_FOUND", message: "Account not found" });
+      if (account.platform !== "instagram") throw new TRPCError({ code: "BAD_REQUEST", message: "Account is not an Instagram account" });
+      await saveInstagramCredentials(ctx.user.id, input.accountId, input.username, input.password);
+      return { success: true };
+    }),
+
+  getInstagramCredentialStatus: protectedProcedure
+    .input(z.object({ accountId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const creds = await getInstagramCredentials(ctx.user.id, input.accountId);
+      if (!creds) return { hasCredentials: false, loginStatus: null, username: null, lastLoginAt: null };
+      return {
+        hasCredentials: true,
+        loginStatus: creds.loginStatus,
+        username: creds.username,
+        lastLoginAt: creds.lastLoginAt,
+      };
+    }),
+
+  loginInstagram: protectedProcedure
+    .input(z.object({
+      accountId: z.number(),
+      verificationCode: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const creds = await getInstagramCredentials(ctx.user.id, input.accountId);
+      if (!creds) throw new TRPCError({ code: "NOT_FOUND", message: "No Instagram credentials saved for this account. Please save credentials first." });
+      const available = await isInstagrapiAvailable();
+      if (!available) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Instagram service is not running. Please contact support." });
+      const password = decryptValue(creds.encryptedPassword);
+      const result = await instaLogin(creds.username, password, input.verificationCode);
+      if (result.requires_2fa) {
+        await updateInstagramCredentialStatus(ctx.user.id, input.accountId, "requires_2fa");
+        return { success: false, requires2FA: true, message: result.message };
+      }
+      if (!result.success) {
+        await updateInstagramCredentialStatus(ctx.user.id, input.accountId, "failed");
+        throw new TRPCError({ code: "UNAUTHORIZED", message: result.message || "Instagram login failed. Check your credentials." });
+      }
+      await updateInstagramCredentialStatus(ctx.user.id, input.accountId, "active");
+      // Update the account handle/displayName with the verified username
+      await updateAccount(input.accountId, ctx.user.id, { handle: creds.username, displayName: creds.username, lastSynced: new Date() });
+      return { success: true, requires2FA: false, message: "Logged in successfully" };
+    }),
+
+  disconnectInstagram: protectedProcedure
+    .input(z.object({ accountId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const creds = await getInstagramCredentials(ctx.user.id, input.accountId);
+      if (creds) {
+        // Attempt to logout from instagrapi service
+        const available = await isInstagrapiAvailable();
+        if (available) {
+          await instaLogout(creds.username).catch(() => {}); // non-fatal
+        }
+      }
+      await deleteInstagramCredentials(ctx.user.id, input.accountId);
+      return { success: true };
+    }),
+
   // Nango: create a connect session token for the frontend popup
   getNangoConnectSession: protectedProcedure
     .input(z.object({
@@ -399,11 +476,27 @@ const accountsRouter = router({
             results.push({ id: account.id, platform: account.platform, handle: account.handle, status: "success", displayName, error: "Follower count not available via LinkedIn API" });
 
           } else if (account.platform === "instagram") {
-            // Instagram requires OAuth — uses Business Login for Instagram via Nango
+            // Prefer instagrapi (private API) if credentials are active
+            const igCreds = await getInstagramCredentials(ctx.user.id, account.id);
+            if (igCreds && igCreds.loginStatus === "active") {
+              const available = await isInstagrapiAvailable();
+              if (available) {
+                try {
+                  const info = await instaGetUserInfo(igCreds.username, igCreds.username);
+                  await updateAccount(account.id, ctx.user.id, { followers: info.follower_count, following: info.following_count, lastSynced: new Date() });
+                  results.push({ id: account.id, platform: account.platform, handle: account.handle, status: "success", followers: info.follower_count, following: info.following_count });
+                  continue;
+                } catch (err) {
+                  console.warn("[syncStats] instagrapi failed for", account.handle, err);
+                  // Fall through to Graph API
+                }
+              }
+            }
+            // Fallback: Instagram Graph API via Nango OAuth token
             let oauthToken = await getOAuthToken(ctx.user.id, account.id);
             if (!oauthToken) {
               await updateAccount(account.id, ctx.user.id, { lastSynced: new Date() });
-              results.push({ id: account.id, platform: account.platform, handle: account.handle, status: "not_supported", error: "Connect your Instagram account to sync metrics" });
+              results.push({ id: account.id, platform: account.platform, handle: account.handle, status: "not_supported", error: "Connect your Instagram account (OAuth or credentials) to sync metrics" });
               continue;
             }
             // If token is expired and we have a Nango connection ID, refresh via Nango
@@ -1346,23 +1439,109 @@ const adminRouter = router({
   }),
 });
 
-// --- Instagram MCP Router (owner's connected account via Graph API) ----------
+// --- Instagram MCP Router (real data via instagrapi, fallback to Graph API) ---
 const instagramMcpRouter = router({
-  accountInfo: protectedProcedure.query(async ({ ctx }) => {
-    const token = await getOAuthTokenByPlatform(ctx.user.id, "instagram");
-    return getInstagramAccountInfo(token?.accessToken);
-  }),
+  accountInfo: protectedProcedure
+    .input(z.object({ accountId: z.number().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      // Try instagrapi first (private API — richer data)
+      const accounts = await getAccountsByUser(ctx.user.id);
+      const igAccounts = accounts.filter(a => a.platform === "instagram");
+      const targetId = input?.accountId ?? igAccounts[0]?.id;
+      if (targetId) {
+        const creds = await getInstagramCredentials(ctx.user.id, targetId);
+        if (creds && creds.loginStatus === "active") {
+          const available = await isInstagrapiAvailable();
+          if (available) {
+            try {
+              const info = await instaGetUserInfo(creds.username, creds.username);
+              return {
+                username: info.username,
+                name: info.full_name,
+                followers: info.follower_count,
+                following: info.following_count,
+                posts: info.media_count,
+                profilePicture: info.profile_pic_url,
+                source: "instagrapi" as const,
+              };
+            } catch (err) {
+              console.warn("[InstagramMcp] instagrapi failed, falling back to Graph API:", err);
+            }
+          }
+        }
+      }
+      // Fallback: Graph API via Nango OAuth token
+      const token = await getOAuthTokenByPlatform(ctx.user.id, "instagram");
+      const info = await getInstagramAccountInfo(token?.accessToken);
+      return info ? { ...info, source: "graph_api" as const } : null;
+    }),
 
   posts: protectedProcedure
-    .input(z.object({ limit: z.number().min(5).max(20).default(10) }))
+    .input(z.object({ limit: z.number().min(5).max(20).default(10), accountId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
+      // Try instagrapi first
+      const accounts = await getAccountsByUser(ctx.user.id);
+      const igAccounts = accounts.filter(a => a.platform === "instagram");
+      const targetId = input?.accountId ?? igAccounts[0]?.id;
+      if (targetId) {
+        const creds = await getInstagramCredentials(ctx.user.id, targetId);
+        if (creds && creds.loginStatus === "active") {
+          const available = await isInstagrapiAvailable();
+          if (available) {
+            try {
+              const posts = await instaGetUserPosts(creds.username, creds.username, input.limit);
+              return posts.map(p => ({
+                id: p.id,
+                type: p.media_type === 2 ? "VIDEO" : "IMAGE",
+                timestamp: p.taken_at,
+                caption: p.caption,
+                permalink: `https://www.instagram.com/p/${p.id}/`,
+                thumbnailUrl: p.thumbnail_url,
+                likeCount: p.like_count,
+                commentCount: p.comment_count,
+                source: "instagrapi" as const,
+              }));
+            } catch (err) {
+              console.warn("[InstagramMcp] instagrapi posts failed, falling back to Graph API:", err);
+            }
+          }
+        }
+      }
+      // Fallback: Graph API
       const token = await getOAuthTokenByPlatform(ctx.user.id, "instagram");
       return getInstagramPosts(input.limit, token?.accessToken);
     }),
 
   postInsights: protectedProcedure
-    .input(z.object({ postId: z.string() }))
+    .input(z.object({ postId: z.string(), accountId: z.number().optional() }))
     .query(async ({ ctx, input }) => {
+      // Try instagrapi first
+      const accounts = await getAccountsByUser(ctx.user.id);
+      const igAccounts = accounts.filter(a => a.platform === "instagram");
+      const targetId = input?.accountId ?? igAccounts[0]?.id;
+      if (targetId) {
+        const creds = await getInstagramCredentials(ctx.user.id, targetId);
+        if (creds && creds.loginStatus === "active") {
+          const available = await isInstagrapiAvailable();
+          if (available) {
+            try {
+              const insights = await instaGetMediaInsights(input.postId, creds.username);
+              return {
+                postId: insights.media_id,
+                likes: insights.like_count,
+                comments: insights.comment_count,
+                reach: insights.reach,
+                impressions: insights.impressions,
+                saved: insights.saved,
+                source: "instagrapi" as const,
+              };
+            } catch (err) {
+              console.warn("[InstagramMcp] instagrapi insights failed, falling back to Graph API:", err);
+            }
+          }
+        }
+      }
+      // Fallback: Graph API
       const token = await getOAuthTokenByPlatform(ctx.user.id, "instagram");
       return getInstagramPostInsights(input.postId, token?.accessToken);
     }),

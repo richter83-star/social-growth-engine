@@ -492,16 +492,16 @@
 - [x] Run full test suite: 217/217 tests pass
 
 ## Instagram Graph API Sync & Meta App Setup
-- [ ] Update syncStats procedure Instagram branch to call Graph API using Nango token
-- [ ] Add Facebook Login product to Meta App
+- [x] Update syncStats procedure Instagram branch to call Graph API using Nango token
+- [x] Add Facebook Login product to Meta App (user confirmed added via Meta Developer dashboard)
 
 ## Instagram Sync & Meta App Setup (Sprint 4)
 - [x] Update syncStats Instagram branch to use Nango token for Graph API calls
 - [x] Add Nango token refresh logic (auto-refresh expired tokens via Nango)
 - [x] Add nangoConnectionId column to oauthTokens schema and run migration
 - [x] Store nangoConnectionId when saving OAuth token after Nango connect
-- [ ] Add Facebook Login product to Meta App (manual step - requires Facebook login)
-- [ ] Add https://api.nango.dev/oauth/callback to Valid OAuth Redirect URIs in Meta App
+- [x] Add Facebook Login product to Meta App (manual step - requires Facebook login - user confirmed done)
+- [x] Add https://api.nango.dev/oauth/callback to Valid OAuth Redirect URIs in Meta App (user confirmed done)
 
 ## Live Data & Agency Tier Sprint (Completed)
 - [x] Upgrade owner account to Agency tier in database
@@ -513,3 +513,28 @@
 - [x] Add nangoConnectionId column to oauthTokens table (migration applied)
 - [x] Store nangoConnectionId in nangoConnected procedure
 - [x] Add Nango token refresh to syncStats Instagram branches
+
+## Instagrapi Integration
+- [ ] Build Python FastAPI microservice wrapping instagrapi
+- [ ] Add Instagram credentials storage (username/password) in DB
+- [ ] Update syncStats Instagram branch to call instagrapi service
+- [ ] Update instagramMcpRouter to use instagrapi service
+- [ ] Add Instagram credential setup UI on Accounts page
+- [ ] Add instagrapi service to project startup
+
+## Instagram Private API Integration (instagrapi)
+- [x] DB: add `instagram_credentials` table (userId, accountId, username, encryptedPassword, loginStatus, sessionData, lastLoginAt)
+- [x] DB: add `saveInstagramCredentials`, `getInstagramCredentials`, `deleteInstagramCredentials`, `updateInstagramCredentialStatus`, `decryptValue` helpers to db.ts
+- [x] Backend: `instagrapiClient.ts` — typed HTTP client for the Python instagrapi microservice (login, logout, getUserInfo, getUserPosts, getMediaInsights, isAvailable)
+- [x] Backend: `accounts.saveInstagramCredentials` tRPC mutation — encrypt & store credentials
+- [x] Backend: `accounts.getInstagramCredentialStatus` tRPC query — return login status per account
+- [x] Backend: `accounts.loginInstagram` tRPC mutation — call instagrapi login, handle 2FA flow
+- [x] Backend: `accounts.disconnectInstagram` tRPC mutation — logout from service + delete credentials
+- [x] Backend: `accounts.syncStats` Instagram branch — prefer instagrapi when credentials are active, fallback to Graph API
+- [x] Backend: `instagramMcpRouter.accountInfo/posts/postInsights` — prefer instagrapi, fallback to Graph API
+- [x] Frontend: `InstagramCredentialSection` sub-component on account cards — Set Credentials / Login / Update / Remove buttons with status badge
+- [x] Frontend: Instagram Credential Dialog — username + password form with show/hide toggle, AES-256 encryption notice
+- [x] Frontend: Instagram 2FA Dialog — 6-digit code input for two-factor authentication flow
+- [x] Frontend: `InstagramPanel.tsx` — update branding from "MCP Connected" to "Private API" / "Graph API" badge based on data source
+- [x] Tests: add `instagrapiClient` and `getInstagramCredentials` mocks to `accounts.sync.test.ts`
+- [x] All 217 tests passing

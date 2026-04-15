@@ -12,6 +12,7 @@ import {
   campaignSchedules, InsertCampaignSchedule,
   subscriptions, InsertSubscription,
   supportMessages, InsertSupportMessage,
+  instagramCredentials, InsertInstagramCredential,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -660,4 +661,101 @@ export async function getChurnReasonsByPlan() {
     map[row.plan][row.reason] = (map[row.plan][row.reason] ?? 0) + 1;
   }
   return map;
+}
+
+// --- Instagram Credentials (for instagrapi microservice) ---------------------
+
+/**
+ * Encrypt a plaintext string using AES-256-CBC with the JWT_SECRET as the key.
+ * Returns a hex-encoded "iv:ciphertext" string.
+ */
+function encryptValue(plaintext: string): string {
+  const crypto = require("crypto") as typeof import("crypto");
+  const secret = process.env.JWT_SECRET ?? "fallback-secret-32-bytes-xxxxxxxx";
+  const key = crypto.createHash("sha256").update(secret).digest(); // 32 bytes
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  return iv.toString("hex") + ":" + encrypted.toString("hex");
+}
+
+/**
+ * Decrypt a value previously encrypted with encryptValue().
+ */
+export function decryptValue(ciphertext: string): string {
+  const crypto = require("crypto") as typeof import("crypto");
+  const secret = process.env.JWT_SECRET ?? "fallback-secret-32-bytes-xxxxxxxx";
+  const key = crypto.createHash("sha256").update(secret).digest();
+  const [ivHex, dataHex] = ciphertext.split(":");
+  const iv = Buffer.from(ivHex, "hex");
+  const data = Buffer.from(dataHex, "hex");
+  const decipher = crypto.createDecipheriv("aes-256-cbc", key, iv);
+  return Buffer.concat([decipher.update(data), decipher.final()]).toString("utf8");
+}
+
+export async function saveInstagramCredentials(
+  userId: number,
+  accountId: number,
+  username: string,
+  password: string
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const encryptedPassword = encryptValue(password);
+  await db.insert(instagramCredentials).values({
+    userId,
+    accountId,
+    username,
+    encryptedPassword,
+    loginStatus: "pending",
+  }).onDuplicateKeyUpdate({
+    set: {
+      username,
+      encryptedPassword,
+      loginStatus: "pending",
+      updatedAt: new Date(),
+    },
+  });
+}
+
+export async function getInstagramCredentials(userId: number, accountId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select()
+    .from(instagramCredentials)
+    .where(and(eq(instagramCredentials.userId, userId), eq(instagramCredentials.accountId, accountId)))
+    .limit(1);
+  return result[0];
+}
+
+export async function getInstagramCredentialsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(instagramCredentials).where(eq(instagramCredentials.userId, userId));
+}
+
+export async function updateInstagramCredentialStatus(
+  userId: number,
+  accountId: number,
+  status: "pending" | "active" | "failed" | "requires_2fa",
+  sessionData?: string
+): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(instagramCredentials)
+    .set({
+      loginStatus: status,
+      lastLoginAt: status === "active" ? new Date() : undefined,
+      sessionData: sessionData ?? undefined,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(instagramCredentials.userId, userId), eq(instagramCredentials.accountId, accountId)));
+}
+
+export async function deleteInstagramCredentials(userId: number, accountId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(instagramCredentials)
+    .where(and(eq(instagramCredentials.userId, userId), eq(instagramCredentials.accountId, accountId)));
 }

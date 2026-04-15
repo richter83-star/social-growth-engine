@@ -8,14 +8,14 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import {
   Users, Plus, Trash2, RefreshCw, Twitter, Linkedin,
   CheckCircle2, AlertCircle, Clock, Link2, Unlink, ShieldCheck,
-  Info, RotateCcw, Loader2,
+  Info, RotateCcw, Loader2, Lock, Eye, EyeOff, KeyRound,
 } from "lucide-react";
 
 type Platform = "twitter" | "reddit" | "linkedin" | "instagram" | "tiktok";
@@ -97,6 +97,130 @@ function syncStatusLabel(status: SyncStatus, result?: SyncResult): string {
   if (status === "not_supported") return result?.error ?? "Connect account to sync";
   if (status === "error") return result?.error ?? "Sync failed";
   return "";
+}
+
+// --- Instagram Credential Section sub-component ----------------------------
+function InstagramCredentialSection({
+  accountId,
+  onOpenCredDialog,
+  onLogin,
+  onDisconnect,
+  isLoggingIn,
+  isDisconnecting,
+}: {
+  accountId: number;
+  onOpenCredDialog: () => void;
+  onLogin: () => void;
+  onDisconnect: () => void;
+  isLoggingIn: boolean;
+  isDisconnecting: boolean;
+}) {
+  const { data: credStatus, isLoading } = trpc.accounts.getInstagramCredentialStatus.useQuery({ accountId });
+
+  if (isLoading) {
+    return (
+      <div className="mt-3 pt-3 border-t border-border/50">
+        <div className="h-4 bg-muted/40 rounded animate-pulse w-32" />
+      </div>
+    );
+  }
+
+  const hasCredentials = credStatus?.hasCredentials ?? false;
+  const loginStatus = credStatus?.loginStatus;
+  const isActive = loginStatus === "active";
+  const isFailed = loginStatus === "failed";
+  const requires2FA = loginStatus === "requires_2fa";
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <KeyRound className="h-3.5 w-3.5 text-pink-400" />
+          <span className="text-xs font-medium text-pink-300">Private API</span>
+          {isActive && (
+            <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-emerald-500/30 text-emerald-400 bg-emerald-500/10">
+              Active
+            </Badge>
+          )}
+          {isFailed && (
+            <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-red-500/30 text-red-400 bg-red-500/10">
+              Failed
+            </Badge>
+          )}
+          {requires2FA && (
+            <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-amber-500/30 text-amber-400 bg-amber-500/10">
+              2FA Needed
+            </Badge>
+          )}
+          {hasCredentials && !isActive && !isFailed && !requires2FA && (
+            <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-muted-foreground/30 text-muted-foreground">
+              Pending
+            </Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          {!hasCredentials ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs gap-1 border-pink-500/40 text-pink-300 hover:bg-pink-500/10"
+              onClick={onOpenCredDialog}
+            >
+              <Lock className="h-3 w-3" />
+              Set Credentials
+            </Button>
+          ) : (
+            <>
+              {!isActive && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs gap-1 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
+                  disabled={isLoggingIn}
+                  onClick={onLogin}
+                >
+                  {isLoggingIn ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                  Login
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                onClick={onOpenCredDialog}
+              >
+                <Lock className="h-3 w-3" />
+                Update
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                disabled={isDisconnecting}
+                onClick={onDisconnect}
+              >
+                <Unlink className="h-3 w-3" />
+                Remove
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+      {hasCredentials && credStatus?.username && (
+        <p className="text-[11px] text-muted-foreground">
+          Saved as <span className="text-foreground font-medium">@{credStatus.username}</span>
+          {credStatus.lastLoginAt && (
+            <> · Last login {new Date(credStatus.lastLoginAt).toLocaleDateString()}</>
+          )}
+        </p>
+      )}
+      {!hasCredentials && (
+        <p className="text-[11px] text-muted-foreground leading-relaxed">
+          Add your Instagram username &amp; password to enable richer metrics via the private API. Credentials are AES-256 encrypted at rest.
+        </p>
+      )}
+    </div>
+  );
 }
 
 export default function Accounts() {
@@ -181,6 +305,52 @@ export default function Accounts() {
   const [syncStatuses, setSyncStatuses] = useState<Record<number, SyncStatus>>({});
   const [syncResults, setSyncResults] = useState<Record<number, SyncResult>>({});
   const [syncingAll, setSyncingAll] = useState(false);
+
+  // Instagram credential dialog state
+  const [igCredDialogAccountId, setIgCredDialogAccountId] = useState<number | null>(null);
+  const [igCredForm, setIgCredForm] = useState({ username: "", password: "" });
+  const [igCredShowPassword, setIgCredShowPassword] = useState(false);
+  const [ig2faDialogAccountId, setIg2faDialogAccountId] = useState<number | null>(null);
+  const [ig2faCode, setIg2faCode] = useState("");
+
+  const saveIgCredsMutation = trpc.accounts.saveInstagramCredentials.useMutation({
+    onSuccess: () => {
+      toast.success("Credentials saved. Click \"Login\" to authenticate.");
+      setIgCredDialogAccountId(null);
+      setIgCredForm({ username: "", password: "" });
+      utils.accounts.list.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const loginIgMutation = trpc.accounts.loginInstagram.useMutation({
+    onSuccess: (result) => {
+      if (result.requires2FA) {
+        toast.info("2FA required — enter your verification code");
+        setIg2faDialogAccountId(igCredDialogAccountId ?? ig2faDialogAccountId);
+        setIgCredDialogAccountId(null);
+      } else {
+        toast.success("Instagram logged in successfully!");
+        setIg2faDialogAccountId(null);
+        setIg2faCode("");
+        utils.accounts.list.invalidate();
+      }
+    },
+    onError: (e) => {
+      toast.error(e.message);
+    },
+  });
+
+  const disconnectIgMutation = trpc.accounts.disconnectInstagram.useMutation({
+    onSuccess: () => {
+      toast.success("Instagram credentials removed");
+      utils.accounts.list.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // Per-account Instagram credential status query (only for instagram accounts)
+  const igAccountIds = useMemo(() => accounts?.filter(a => a.platform === "instagram").map(a => a.id) ?? [], [accounts]);
 
   // Nango connect handler — creates session token, opens popup, stores token
   const handleNangoConnect = useCallback(async (accountId: number, platform: "twitter" | "linkedin" | "instagram") => {
@@ -461,6 +631,18 @@ export default function Accounts() {
                     </div>
                   </div>
 
+                  {/* Instagram Private API Credentials section */}
+                  {acc.platform === "instagram" && (
+                    <InstagramCredentialSection
+                      accountId={acc.id}
+                      onOpenCredDialog={() => setIgCredDialogAccountId(acc.id)}
+                      onLogin={() => loginIgMutation.mutate({ accountId: acc.id })}
+                      onDisconnect={() => disconnectIgMutation.mutate({ accountId: acc.id })}
+                      isLoggingIn={loginIgMutation.isPending}
+                      isDisconnecting={disconnectIgMutation.isPending}
+                    />
+                  )}
+
                   {/* OAuth Connect / Disconnect row */}
                   {isOAuthSupported && (
                     <div className="mt-3 pt-3 border-t border-border/50 space-y-2">
@@ -582,7 +764,134 @@ export default function Accounts() {
         </div>
       )}
 
-      {/* Instagram Live Stats Panel (MCP connected) */}
+      {/* Instagram Credential Dialog */}
+      <Dialog open={igCredDialogAccountId !== null} onOpenChange={(open) => { if (!open) { setIgCredDialogAccountId(null); setIgCredForm({ username: "", password: "" }); } }}>
+        <DialogContent className="bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="text-foreground flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-pink-400" />
+              Instagram Credentials
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground text-sm">
+              Your credentials are AES-256 encrypted at rest and never shared. They are used only to authenticate with Instagram's private API for richer metrics.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label className="text-foreground">Instagram Username</Label>
+              <Input
+                className="bg-input border-border text-foreground placeholder:text-muted-foreground"
+                placeholder="yourusername (without @)"
+                value={igCredForm.username}
+                onChange={(e) => setIgCredForm(f => ({ ...f, username: e.target.value }))}
+                autoComplete="username"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-foreground">Password</Label>
+              <div className="relative">
+                <Input
+                  className="bg-input border-border text-foreground placeholder:text-muted-foreground pr-10"
+                  type={igCredShowPassword ? "text" : "password"}
+                  placeholder="Your Instagram password"
+                  value={igCredForm.password}
+                  onChange={(e) => setIgCredForm(f => ({ ...f, password: e.target.value }))}
+                  autoComplete="current-password"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+                  onClick={() => setIgCredShowPassword(v => !v)}
+                >
+                  {igCredShowPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </Button>
+              </div>
+            </div>
+            <div className="p-3 rounded-lg bg-pink-500/10 border border-pink-500/20 flex items-start gap-2">
+              <ShieldCheck className="h-4 w-4 text-pink-400 mt-0.5 shrink-0" />
+              <p className="text-xs text-pink-300 leading-relaxed">
+                Credentials are encrypted with AES-256-CBC before storage. They are used only to log into Instagram's private API to fetch follower counts and post metrics. Nothing is posted on your behalf.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => { setIgCredDialogAccountId(null); setIgCredForm({ username: "", password: "" }); }}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={!igCredForm.username || !igCredForm.password || saveIgCredsMutation.isPending}
+                onClick={() => {
+                  if (igCredDialogAccountId !== null) {
+                    saveIgCredsMutation.mutate({
+                      accountId: igCredDialogAccountId,
+                      username: igCredForm.username.replace(/^@/, ""),
+                      password: igCredForm.password,
+                    });
+                  }
+                }}
+              >
+                {saveIgCredsMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
+                Save & Encrypt
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Instagram 2FA Dialog */}
+      <Dialog open={ig2faDialogAccountId !== null} onOpenChange={(open) => { if (!open) { setIg2faDialogAccountId(null); setIg2faCode(""); } }}>
+        <DialogContent className="bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="text-foreground flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-amber-400" />
+              Two-Factor Authentication
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground text-sm">
+              Instagram requires a verification code. Check your authenticator app or SMS.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label className="text-foreground">Verification Code</Label>
+              <Input
+                className="bg-input border-border text-foreground placeholder:text-muted-foreground text-center text-lg tracking-widest"
+                placeholder="000000"
+                maxLength={8}
+                value={ig2faCode}
+                onChange={(e) => setIg2faCode(e.target.value.replace(/\D/g, ""))}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => { setIg2faDialogAccountId(null); setIg2faCode(""); }}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={ig2faCode.length < 6 || loginIgMutation.isPending}
+                onClick={() => {
+                  if (ig2faDialogAccountId !== null) {
+                    loginIgMutation.mutate({ accountId: ig2faDialogAccountId, verificationCode: ig2faCode });
+                  }
+                }}
+              >
+                {loginIgMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify & Login"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Instagram Live Stats Panel */}
       <InstagramPanel />
 
       {/* API coverage info banner */}
@@ -592,7 +901,7 @@ export default function Accounts() {
           <p className="text-xs text-muted-foreground leading-relaxed">
             <span className="text-sky-400">Twitter/X</span> — follower count, following, tweet count (OAuth required for authenticated requests).{" "}
             <span className="text-blue-400">LinkedIn</span> — display name verification (follower counts not exposed by LinkedIn's public API).{" "}
-            <span className="text-pink-400">Instagram</span> — follower count &amp; media count (requires Professional account + OAuth).{" "}
+            <span className="text-pink-400">Instagram</span> — follower count &amp; media count via Private API (set credentials on the card) or OAuth (Professional account required).{" "}
             <span className="text-muted-foreground">TikTok, Reddit</span> — sync not yet supported.
           </p>
           <p className="text-xs text-muted-foreground">

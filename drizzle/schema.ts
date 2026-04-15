@@ -315,3 +315,21 @@ export const syncJobLogs = mysqlTable("sync_job_logs", {
 });
 export type SyncJobLog = typeof syncJobLogs.$inferSelect;
 export type InsertSyncJobLog = typeof syncJobLogs.$inferInsert;
+
+// Instagram private API credentials (for instagrapi microservice)
+// Stored encrypted; separate from OAuth tokens which are for the Graph API
+export const instagramCredentials = mysqlTable("instagram_credentials", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  accountId: int("accountId").notNull().unique(), // one credential set per account
+  username: varchar("username", { length: 128 }).notNull(),
+  encryptedPassword: text("encryptedPassword").notNull(), // AES-encrypted
+  sessionData: text("sessionData"),               // cached instagrapi session JSON (encrypted)
+  lastLoginAt: timestamp("lastLoginAt"),
+  loginStatus: mysqlEnum("loginStatus", ["pending", "active", "failed", "requires_2fa"]).default("pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type InstagramCredential = typeof instagramCredentials.$inferSelect;
+export type InsertInstagramCredential = typeof instagramCredentials.$inferInsert;
