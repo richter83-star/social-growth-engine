@@ -10,7 +10,9 @@
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
-    "db:push": "drizzle-kit generate && drizzle-kit migrate"
+    "db:push": "drizzle-kit generate && drizzle-kit migrate",
+    "instagrapi": "cd instagrapi-service && python3 main.py",
+    "instagrapi:install": "pip3 install -r instagrapi-service/requirements.txt"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",

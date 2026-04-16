@@ -515,12 +515,12 @@
 - [x] Add Nango token refresh to syncStats Instagram branches
 
 ## Instagrapi Integration
-- [ ] Build Python FastAPI microservice wrapping instagrapi
-- [ ] Add Instagram credentials storage (username/password) in DB
-- [ ] Update syncStats Instagram branch to call instagrapi service
-- [ ] Update instagramMcpRouter to use instagrapi service
-- [ ] Add Instagram credential setup UI on Accounts page
-- [ ] Add instagrapi service to project startup
+- [x] Build Python FastAPI microservice wrapping instagrapi
+- [x] Add Instagram credentials storage (username/password) in DB
+- [x] Update syncStats Instagram branch to call instagrapi service
+- [x] Update instagramMcpRouter to use instagrapi service
+- [x] Add Instagram credential setup UI on Accounts page
+- [x] Add instagrapi service to project startup
 
 ## Instagram Private API Integration (instagrapi)
 - [x] DB: add `instagram_credentials` table (userId, accountId, username, encryptedPassword, loginStatus, sessionData, lastLoginAt)
