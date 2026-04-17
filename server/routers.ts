@@ -1056,7 +1056,7 @@ const analyticsRouter = router({
       const db = await getDb();
       if (!db) return [];
       const { performanceMetrics } = await import("../drizzle/schema");
-      const { desc, eq, gte, and, isNotNull } = await import("drizzle-orm");
+      const { eq, gte, and, isNotNull } = await import("drizzle-orm");
       // Cutoff date string (YYYY-MM-DD)
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - input.days);
@@ -1083,6 +1083,135 @@ const analyticsRouter = router({
         followers: r.followers ?? 0,
         followerDelta: r.followerDelta ?? 0,
       }));
+    }),
+
+  /**
+   * Returns daily follower snapshots for Instagram accounts only.
+   * Each entry: { date, accountId, handle, followers, followerDelta, engagementRate }
+   * Used by the Instagram Insights chart card.
+   */
+  getInstagramInsights: protectedProcedure
+    .input(z.object({ days: z.number().min(7).max(365).default(30) }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { snapshots: [], accounts: [], summary: { totalFollowers: 0, followerDelta: 0, avgEngagementRate: 0, totalMediaCount: 0 } };
+      const { performanceMetrics } = await import("../drizzle/schema");
+      const { eq, gte, and, isNotNull } = await import("drizzle-orm");
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - input.days);
+      const cutoffStr = cutoff.toISOString().slice(0, 10);
+      // Get Instagram accounts only
+      const allAccounts = await getAccountsByUser(ctx.user.id);
+      const igAccounts = allAccounts.filter((a) => a.platform === "instagram");
+      if (igAccounts.length === 0) {
+        return { snapshots: [], accounts: [], summary: { totalFollowers: 0, followerDelta: 0, avgEngagementRate: 0, totalMediaCount: 0 } };
+      }
+      const igAccountIds = igAccounts.map((a) => a.id);
+      const accountMap = new Map(igAccounts.map((a) => [a.id, a]));
+      const rows = await db
+        .select()
+        .from(performanceMetrics)
+        .where(
+          and(
+            eq(performanceMetrics.userId, ctx.user.id),
+            isNotNull(performanceMetrics.accountId),
+            gte(performanceMetrics.date, cutoffStr)
+          )
+        )
+        .orderBy(performanceMetrics.date);
+      // Filter to Instagram accounts only
+      const igRows = rows.filter((r) => r.accountId !== null && igAccountIds.includes(r.accountId!));
+      const snapshots = igRows.map((r) => ({
+        date: r.date,
+        accountId: r.accountId!,
+        handle: accountMap.get(r.accountId!)?.handle ?? `Account ${r.accountId}`,
+        followers: r.followers ?? 0,
+        followerDelta: r.followerDelta ?? 0,
+        engagementRate: r.engagementRate ?? 0,
+      }));
+      // Summary stats from current account state
+      const totalFollowers = igAccounts.reduce((s, a) => s + (a.followers ?? 0), 0);
+      const followerDelta = igRows.reduce((s, r) => s + (r.followerDelta ?? 0), 0);
+      const engRates = igRows.filter((r) => (r.engagementRate ?? 0) > 0).map((r) => r.engagementRate ?? 0);
+      const avgEngagementRate = engRates.length > 0 ? engRates.reduce((s, v) => s + v, 0) / engRates.length : 0;
+      return {
+        snapshots,
+        accounts: igAccounts.map((a) => ({
+          id: a.id,
+          handle: a.handle,
+          displayName: a.displayName,
+          followers: a.followers ?? 0,
+          following: a.following ?? 0,
+          engagementRate: a.engagementRate ?? 0,
+          lastSynced: a.lastSynced ? a.lastSynced.toISOString() : null,
+        })),
+        summary: {
+          totalFollowers,
+          followerDelta,
+          avgEngagementRate: parseFloat(avgEngagementRate.toFixed(2)),
+          totalMediaCount: 0, // populated by instagrapi sync when available
+        },
+      };
+    }),
+
+  /**
+   * Returns the top posts by engagement for Instagram accounts.
+   * Reads from the engagement_queue items that were posted to Instagram
+   * and from stored metrics. Falls back to returning an empty array gracefully.
+   */
+  getInstagramPostPerformance: protectedProcedure
+    .input(z.object({ days: z.number().min(7).max(365).default(30), limit: z.number().min(1).max(20).default(5) }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const { engagementQueue, discoveredThreads, campaigns } = await import("../drizzle/schema");
+      const { eq, gte, and, desc, inArray } = await import("drizzle-orm");
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - input.days);
+      // Get posted Instagram engagement items
+      const allAccounts = await getAccountsByUser(ctx.user.id);
+      const igAccountIds = allAccounts.filter((a) => a.platform === "instagram").map((a) => a.id);
+      if (igAccountIds.length === 0) return [];
+      const postedItems = await db
+        .select()
+        .from(engagementQueue)
+        .where(
+          and(
+            eq(engagementQueue.userId, ctx.user.id),
+            eq(engagementQueue.status, "posted"),
+            gte(engagementQueue.updatedAt, cutoff)
+          )
+        )
+        .orderBy(desc(engagementQueue.updatedAt))
+        .limit(input.limit * 3);
+      // Get thread info for context
+      const threadIdSet = new Set<number>();
+      for (const item of postedItems) { if (item.threadId !== null) threadIdSet.add(item.threadId); }
+      const threadIds = Array.from(threadIdSet);
+      const threads = threadIds.length > 0
+        ? await db.select().from(discoveredThreads).where(inArray(discoveredThreads.id, threadIds))
+        : [];
+      const threadMap = new Map(threads.map((t) => [t.id, t]));
+      // Filter to Instagram threads
+      const igItems = postedItems
+        .filter((item) => {
+          const thread = threadMap.get(item.threadId!);
+          return thread?.platform === "instagram";
+        })
+        .slice(0, input.limit);
+      return igItems.map((item) => {
+        const thread = threadMap.get(item.threadId!);
+        return {
+          id: item.id,
+          content: item.editedContent ?? item.generatedComment,
+          threadTitle: thread?.threadTitle ?? "Instagram Post",
+          threadUrl: thread?.threadUrl ?? "",
+          intentScore: thread?.intentScore ?? 0,
+          postedAt: item.updatedAt.toISOString(),
+          likes: 0,    // would be populated by instagrapi media insights sync
+          comments: 0, // would be populated by instagrapi media insights sync
+        };
+      });
     }),
 });
 

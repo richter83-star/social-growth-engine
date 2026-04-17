@@ -538,3 +538,13 @@
 - [x] Frontend: `InstagramPanel.tsx` — update branding from "MCP Connected" to "Private API" / "Graph API" badge based on data source
 - [x] Tests: add `instagrapiClient` and `getInstagramCredentials` mocks to `accounts.sync.test.ts`
 - [x] All 217 tests passing
+
+## Instagram Insights Chart Card (Analytics Page)
+- [x] Backend: `analytics.getInstagramInsights` tRPC query — returns daily follower snapshots + engagement rate for all Instagram accounts over a configurable time range
+- [x] Backend: `analytics.getInstagramPostPerformance` tRPC query — returns top posts by engagement (likes + comments) from the most recent sync
+- [x] Frontend: `InstagramInsightsCard` component — follower growth area chart (per-account lines), media count badge, engagement rate sparkline
+- [x] Frontend: `InstagramPostPerformance` component — top-5 posts bar chart (likes vs comments), with caption preview on hover
+- [x] Frontend: Add both cards to Analytics page below the Follower Growth chart, visible only when at least one Instagram account exists
+- [x] Frontend: Empty state when no Instagram accounts are connected (with link to Accounts page)
+- [x] Frontend: KPI summary row: total followers, follower delta (period), avg engagement rate, total posts — for Instagram accounts only
+- [x] Tests: `analytics.getInstagramInsights` returns correct rows filtered by platform

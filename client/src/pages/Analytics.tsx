@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
   BarChart3, TrendingUp, Users, MessageSquareMore, Brain, Loader2, RefreshCw,
 } from "lucide-react";
+import InstagramInsightsCard from "@/components/InstagramInsightsCard";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LineChart, Line, Legend,
@@ -445,6 +446,9 @@ export default function Analytics() {
           </div>
         </>
       )}
+
+      {/* Instagram Insights */}
+      <InstagramInsightsCard />
 
       {/* AI Learning Insights */}
       <Card className="bg-card border-border">
